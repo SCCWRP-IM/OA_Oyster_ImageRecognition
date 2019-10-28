@@ -9,6 +9,9 @@ from imageai.Detection.Custom import CustomObjectDetection
 import time
 import os
 
+# clear output
+#os.system("rm output_images/*.*")
+os.system("rm cropped_photos/*.*")
 
 TIMESTAMP = time.time() * 1000
 print(TIMESTAMP)
@@ -51,12 +54,12 @@ class Contour:
         "Original image should be the numpy array version, not the path to the image"
         self.points = points
         self.original_image = original_image
-        self.max_x = nanmax([x[0] for x in self.points])
-        self.max_y = nanmax([y[1] for y in self.points])
-        self.min_x = nanmin([x[0] for x in self.points])
-        self.min_y = nanmin([y[1] for y in self.points])
-    def crop_window(cushion=0, path)    
-        self.window = self.original_image[self.min_x - cushion:self.max_x + cushion, self.min_y - cushion:self.max_y + cushion]
+    def crop_window(self, path, image, cushion=0):
+        self.max_x = nanmax([x[0] + cushion for x in self.points] + [image.shape[1]])
+        self.max_y = nanmax([y[1] + cushion for y in self.points] + [image.shape[0]])
+        self.min_x = nanmin([x[0] - cushion for x in self.points] + [0])
+        self.min_y = nanmin([y[1] - cushion for y in self.points] + [0])
+        self.window = image[self.min_x:self.max_x, self.min_y:self.max_y]
         cv.imwrite(path, self.window)
         return None
     def containsOysters(self, path, detector):
@@ -76,10 +79,8 @@ class Contour:
             if oysters == []:
                 print("unable to detect an oyster in coordinates (%s,%s) to (%s,%s) in contour %s" % (min_x, min_y, max_x, max_y, i))
                 print("p[I_row]: %s, p[I_col]: %s" % (p[I_row], p[I_col]))
-                self.containsOysters = False
                 return False
             else:
-                self.containsOysters = True
                 return True
         except IOError:
             print("Unable to read in image %s. Try calling the .crop_window() function first and check the file path to ensure it is correct")
@@ -115,8 +116,14 @@ class Contour:
             l = max(lengths) - min(lengths) # length distance between pts
             w = max(widths) - min(widths) # width distance between pts
             size[angle] = [l, w] # l w vector for each theta
-            if sz != np.amax(size, axis=0): # Satisfaction of this condition implies that the value of sz has changed
-                sz = np.amax(size, axis=0) # maximum length width for size of object
+            #print("sz: %s" % sz)
+            #print("type(sz) == %s" % type(sz))
+            #print("np.amax(size, axis=0): %s" % np.amax(size, axis=0))
+            #print("type(np.amax(size, axis=0)) == %s" % type(np.amax(size, axis=0)))
+            #print("sz != np.amax(size, axis=0): %s" % sz != np.amax(size, axis=0))
+            #print(sz != np.amax(size, axis=0))
+            if sz != list(np.amax(size, axis=0)): # Satisfaction of this condition implies that the value of sz has changed
+                sz = list(np.amax(size, axis=0)) # maximum length width for size of object
                 max_length_index = lengths.index(max(lengths)) # in the array p, this is the index where we find one of the points along the contour that defines the length
                 min_length_index = lengths.index(min(lengths)) # in the array p, this is the index where we find one of the points along the contour that defines the length
                 max_width_index = widths.index(max(widths)) # in the array p, this is the index where we find one of the points along the contour that defines the width
@@ -125,21 +132,21 @@ class Contour:
                 min_length_coord = tuple(p[min_length_index])
                 max_width_coord = tuple(p[max_width_index])
                 min_width_coord = tuple(p[min_width_index])
-                length = nanmax(sz[0], sz[1])
-                width = nanmin(sz[0], sz[1])
+                length = nanmax([sz[0], sz[1]])
+                width = nanmin([sz[0], sz[1]])
         self.length = length
         self.width = width
         self.max_length_coord = max_length_coord
         self.min_length_coord = min_length_coord
         self.max_width_coord = max_width_coord
         self.min_width_coord = min_width_coord
-        return {'length':length,'width',width}
+        return {'length':length,'width':width}
         
     def drawLengthAndWidth(self, image):
         "image represents the image we are drawing on"
-        cv.line(self.original_image, self.min_length_coord, self.max_length_coord, (0,255,0))
-        cv.line(self.original_image, self.min_width_coord, self.max_width_coord, (0,255,0))
-        cv.putText(self.original_image, "L:%spx, W:%spx", self.max_length_coord, FONT_HERSHEY_PLAIN, 1, (0,0,255), 2)
+        cv.line(image, self.min_length_coord, self.max_length_coord, (0,255,0))
+        cv.line(image, self.min_width_coord, self.max_width_coord, (0,255,0))
+        cv.putText(image, "L:%spx, W:%spx" % (self.length, self.width), self.max_length_coord, cv.FONT_HERSHEY_PLAIN, 1, (0,0,255), 2)
         return None
         
 
@@ -150,6 +157,7 @@ im = image_resize(im, height = 800)
 imgray = cv.cvtColor(im,cv.COLOR_BGR2GRAY)
 imgray = cv.GaussianBlur(imgray, (3,3), 0)
 ret,thresh = cv.threshold(imgray, 185, 255, cv.THRESH_BINARY_INV) # change 1st number fr shadows of shapes
+cv.imwrite("output_images/threshed.jpg", thresh)
 contours, hierarchy = cv.findContours(thresh,cv.RETR_TREE,cv.CHAIN_APPROX_SIMPLE)
 
 
@@ -197,14 +205,22 @@ for i in range(len(contours)):
         #print(j, coord)
         p[j] = points[j][0]    
     del points
-    
+   
+    p = np.array(p)
+
     contour = Contour(p, im)
     cropped_path = "cropped_photos/contour-%s.jpg" % i
-    contour.crop_window(cushion=15, path = cropped_path)
-    if contour.containsOysters(path=cropped_path, detector=detector) and contour.matchOysterShape(contour_standard):
-        contour.getSize()
-        print("contour %s represents and oyster of length %s and width %s" % (i, contour.length, contour.width))
-        contour.drawLengthAndWidth(im)
+    contour.crop_window(path=cropped_path,image=im,cushion=7) # path argument is cropped_path, cushion argument is 15 pixels
+    if cv.imread(cropped_path) is not None:
+        if contour.matchOysterShape(contour_standard) and contour.containsOysters(path=cropped_path, detector=detector):
+            contour.getSize()
+            if contour.length > 25:
+                print("contour %s represents and oyster of length %s and width %s" % (i, contour.length, contour.width))
+                contour.drawLengthAndWidth(image=im)
+            else:
+                continue
+        else:
+            continue
     else:
         continue
 

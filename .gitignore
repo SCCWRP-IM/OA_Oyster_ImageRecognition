@@ -5,3 +5,6 @@ output_images
 object_detection/
 __pycache__
 test.jpg
+*.h5
+testing/
+

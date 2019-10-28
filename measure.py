@@ -1,7 +1,9 @@
 import numpy as np
 import cv2 as cv
+from pandas import Series, DataFrame, isnull
 from scipy.spatial import ConvexHull, convex_hull_plot_2d
 from numpy import random, nanmax, nanmin, argmax, unravel_index
+from numpy.linalg import norm
 from scipy.spatial.distance import pdist, squareform
 from scipy.ndimage import distance_transform_edt
 import imageai
@@ -15,6 +17,10 @@ os.system("rm cropped_photos/*.*")
 
 TIMESTAMP = time.time() * 1000
 print(TIMESTAMP)
+
+def vector(arr1, arr2): # arr is for array
+    return(arr1 - arr2)
+
 
 
 def image_resize(image, width = None, height = None, inter = cv.INTER_AREA):
@@ -94,7 +100,7 @@ class Contour:
             return False
         else:
             return True
-    def getSize(self, theta=range(0,91)):
+    def getSize_old(self, theta=range(0,91)):
         size = [[] for lw in range(0,91)] #init size for lw vectors at each theta
         sz = None # initialize the sz variable otherwise it will explode on the first iteration
         for angle in theta: 
@@ -141,7 +147,77 @@ class Contour:
         self.max_width_coord = max_width_coord
         self.min_width_coord = min_width_coord
         return {'length':length,'width':width}
+    def getSize(self):
+        '''
+        Using the method of getting the max distance across and a nearly orthogonal vector of max distance to that one
+        Hard to explain in words
+        '''
+        # we want to loop through the points contained in p for each contour. 
+        # p is a set of points that form the contour so the contours contains a set of p per contour drawn
+        # compute distance
+        D = pdist(self.points)
+        # input into an array
+        D = squareform(D);
+        # find max distance and which points this corresponds to
+        self.length = round(nanmax(D), 2)
+        # called I_row and I_col since it is grabbing the "ij" location in a matrix where the max occurred.
+        # the row number where it occurs represents one of the indices in the original self.points array where one of the points on the contour lies
+        # the column number would be the point on the opposite side of the contour
+        # L_row, and L_col since these indices correspond with coordinate points that give us the length
+        [L_row, L_col] = unravel_index( argmax(D), D.shape )
         
+        self.min_length_coord = tuple(self.points[L_row])
+        self.max_length_coord = tuple(self.points[L_col])
+        
+        # If the length is too small, then the program must have mistakenly detected an oyster.
+        # which would make sense given the minimum percentage probability that we currently have set (10%)
+        if self.length > 25:
+            # length axis represents a unit vector along the direction where we found the longest distance over the contour
+            length_axis = (np.array(p[L_col]) - np.array(p[L_row])) / norm(np.array(p[L_col]) - np.array(p[L_row]))
+           
+            # all_vecs will be an list of vectors that are all the combinations of vectors that pass over the contour area
+            all_vecs = []
+            for i in range(0, len(self.points)):
+                for j in range(i, len(self.points)):
+                    all_vecs.append(np.array(self.points[i]) - np.array(self.points[j]))
+            
+            # make it a column of a pandas dataframe
+            vectors_df = DataFrame({'all_vecs': all_vecs})
+            
+            # Here we normalize all those vectors to prepare to take the dot product with the vector called "length vector"
+            # Dot product will be used to determine orthogonality
+            vectors_df['all_vecs_normalized'] = vectors_df.all_vecs.apply(lambda x: x / norm(x))
+
+            # Take the dot product
+            vectors_df['dot_product'] = vectors_df.all_vecs_normalized.apply(lambda x: np.dot(x, length_axis))
+            #vectors_df['orthogonal'] = vectors_df.dot_product.apply(lambda x: x < 0.15)
+            
+            # get the norm of those vectors that pass over the contour if they are "orthogonal enough" to the "length axis" or else give it a np.nan value
+            # A perfectly orthogonal vector to the length axis will produce a dot product of zero
+            vectors_df['widths'] = vectors_df.apply(lambda x: norm(x['all_vecs']) if x['dot_product'] < 0.15 else np.nan, axis = 1)
+
+            print(vectors_df.head())
+            print(vectors_df[~isnull(vectors_df.widths)].widths.tolist())
+
+            # Make a matrix out of it to grab indices where the max "width" was created
+            # After that it is the same workflow as getting length.
+            # The idea is to get lengths of all vectors that pass over the contour area, then replace ones that are not orthogonal to the length with "np.nan"s
+            # Then with that set, take the maximum excluding the np.nan's
+            widths = squareform(np.array(vectors_df.widths.tolist()))
+            self.width = round(nanmax(widths), 2)
+            [W_row, W_col] = unravel_index(argmax(widths), widths.shape)
+            self.min_width_coord = tuple(self.points[W_row])
+            self.max_width_coord = tuple(self.points[W_col])
+            print(self.min_width_coord)
+
+            print(self.max_width_coord)
+            print(self.min_length_coord)
+            print(self.max_length_coord)
+        else:
+            print("this contour is most likely not an oyster due to unusually short length")
+
+
+
     def drawLengthAndWidth(self, image):
         "image represents the image we are drawing on"
         cv.line(image, self.min_length_coord, self.max_length_coord, (0,255,0))

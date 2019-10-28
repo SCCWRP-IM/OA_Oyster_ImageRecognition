@@ -1,0 +1,7 @@
+cropped_photos
+Extra_models
+model_building
+output_images
+object_detection/
+__pycache__
+test.jpg

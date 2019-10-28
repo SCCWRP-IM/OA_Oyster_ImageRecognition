@@ -134,8 +134,8 @@ class Contour:
                 min_width_coord = tuple(p[min_width_index])
                 length = nanmax([sz[0], sz[1]])
                 width = nanmin([sz[0], sz[1]])
-        self.length = length
-        self.width = width
+        self.length = round(length, 2)
+        self.width = round(width, 2)
         self.max_length_coord = max_length_coord
         self.min_length_coord = min_length_coord
         self.max_width_coord = max_width_coord

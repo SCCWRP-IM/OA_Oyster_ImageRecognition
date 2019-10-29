@@ -4,15 +4,29 @@
 #   docs.microsoft.com/en-us/azure/cognitive-services/computer-vision/quickstarts-sdk/python-sdk    #
 #                                                                                                   #
 #####################################################################################################
+
+# ENDPOINTS
+endpoint1 = "https://westcentralus.api.cognitive.microsoft.com/vision/v1.0/"
+endpoint2 = "https://westcentralus.api.cognitive.microsoft.com/vision/v2.0/"
+endpoint3 = "https://westcentralus.api.cognitive.microsoft.com/vision/v2.1/"
+
+# KEYS
+key1 = "acc7313e80374a31a860bd8c9de76953"
+key2 = "b7c16e1975ab488899414161185d0f82"
+
+from azure.cognitiveservices.vision.computervision import ComputerVisionClient
 from azure.cognitiveservices.vision.computervision.models import TextOperationStatusCodes
-from azure.cognitiveservices.vision.computervision.models import TestRecognitionMode
+from azure.cognitiveservices.vision.computervision.models import TextRecognitionMode
 from azure.cognitiveservices.vision.computervision.models import VisualFeatureTypes
-from msrest.authentication import CognitiveServicesCredentialsd
+from msrest.authentication import CognitiveServicesCredentials
 
 import os
 import sys
 import time
 
+'''
+os.system('export COMPUTER_VISION_SUBSCRIPTION_KEY="%s"' % endpoint1)
+os.system('export COMPUTER_VISION_ENDPOINT="%s"' % key1)
 
 if 'COMPUTER_VISION_SUBSCRIPTION_KEY' in os.environ:
     subscription_key = os.environ['COMPUTER_VISION_SUBSCRIPTION_KEY']
@@ -25,10 +39,16 @@ if 'COMPUTER_VISION_ENDPOINT' in os.environ:
 else:
     print("Please set the COMPUTER_VISION_ENDPOINT environment variable")
     sys.exit()
+'''
 
-computervision_client = ComputerVisionClient(endpoint, CognitiveServicesCredentials(subscription_key))
+# AHHHHHH
+#computervision_client = ComputerVisionClient(endpoint, CognitiveServicesCredentials(subscription_key))
+computervision_client = ComputerVisionClient(endpoint1, CognitiveServicesCredentials(key1))
 
-remote_image_url = "http://data.sccwrp.org/tmp/oysters/IMG_9823.JPG"
+remote_image_url = "https://raw.githubusercontent.com/SCCWRP-IM/OA_Oyster_ImageRecognition/master/OysterShape.jpg"
+#remote_image_url = "http://data.sccwrp.org/tmp/IMG_9823.JPG"
+local_image_path = "photos/IMG_9823.jpg"
+local_image_path = open(local_image_path)
 recognize_printed_results = computervision_client.batch_read_file(remote_image_url, raw = True)
 
 while True:

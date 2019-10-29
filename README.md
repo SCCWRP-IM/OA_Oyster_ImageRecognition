@@ -1,5 +1,5 @@
 # OA_Oyster_ImageRecognition
-Repository to count and measure oysters
+Repository to count and measure oysters.
 Keep .h5 data files and .jpg images out of the repository, or keep them in but make sure they get gitignored
 
 To run in an environment that is already set up, nevigate to the directory where the repository lives on your local machine, and run a docker container from the image sccwrp/oyster-measurement:master (May be updated later. Don't know why I used master rather than latest...)

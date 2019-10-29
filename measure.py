@@ -216,8 +216,6 @@ class Contour:
         else:
             print("this contour is most likely not an oyster due to unusually short length")
 
-
-
     def drawLengthAndWidth(self, image):
         "image represents the image we are drawing on"
         cv.line(image, self.min_length_coord, self.max_length_coord, (0,255,0))

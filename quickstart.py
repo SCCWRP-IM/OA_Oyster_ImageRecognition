@@ -8,6 +8,9 @@ import os
 import sys
 import time
 
+
+
+
 #print(os.environ)
 
 # Add your Computer Vision subscription key to your environment variables.
@@ -46,9 +49,12 @@ while True:
         break
     time.sleep(1)
 #Print the detected text, line by line
+# We will also go ahead and store the results in a python dictionary
+text_results = dict()
 if get_printed_text_results.status == TextOperationStatusCodes.succeeded:
     for text_result in get_printed_text_results.recognition_results:
         for line in text_result.lines:
             print(line.text)
             print(line.bounding_box)
+            text_results[line.text] = line.bounding_box
             print()

@@ -8,3 +8,5 @@ test.jpg
 *.h5
 testing/
 ._DS_Store
+photos/*.JPG
+

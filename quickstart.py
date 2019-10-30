@@ -7,7 +7,7 @@ from msrest.authentication import CognitiveServicesCredentials
 import os
 import sys
 import time
-
+import cv2 as cv
 
 
 
@@ -28,7 +28,7 @@ else:
 
 computervision_client = ComputerVisionClient(endpoint, CognitiveServicesCredentials(subscription_key))
 
-remote_image_url = "http://data.sccwrp.org/tmp/IMG_9823.JPG"
+remote_image_url = "http://data.sccwrp.org/tmp/IMG_9818.JPG"
 
 
 # Call API with URL and raw response (allows you to get the operation location)
@@ -58,3 +58,19 @@ if get_printed_text_results.status == TextOperationStatusCodes.succeeded:
             print(line.bounding_box)
             text_results[line.text] = line.bounding_box
             print()
+
+image = cv.imread("photos/IMG_9818.JPG")
+print(image)
+for key in text_results.keys(): # recall that the value associated with each key is a list
+    # coords = coordinates. each list in the dictionary are the sets of pixel points for the bounding box of recognized text
+    coords = text_results[key]
+    min_x = int(min([x for x in coords if coords.index(x) % 2 == 0]))
+    min_y = int(min([y for y in coords if coords.index(y) % 2 == 1]))
+    max_x = int(max([x for x in coords if coords.index(x) % 2 == 0]))
+    max_y = int(max([y for y in coords if coords.index(y) % 2 == 1]))
+    cv.rectangle(image, tuple([min_x, min_y]), tuple([max_x, max_y]), (0,0,255))
+    del coords
+
+cv.imwrite("cropped_photos/test.jpg", image)
+
+

@@ -6,7 +6,7 @@ To run in an environment that is already set up, nevigate to the directory where
 
 I like to run it in detached mode (-d) and leave it running, then open up a terminal in it later with docker exec -it (container name) /bin/bash)
 
-docker container run -d -it --name (whatever you want to call it) -v /path/to/repo/:/home/ sccwrp/oyster-measurement:latest
+docker container run -d -it --name (whatever you want to call it) -v /path/to/repo/:/home/imagerec sccwrp/oyster-measurement:latest
 
 Technically the mount doesn't have to be in the home directory of the container, but I would personally prefer to do it this way.
 

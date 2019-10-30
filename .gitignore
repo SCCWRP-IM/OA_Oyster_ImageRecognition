@@ -1,7 +1,7 @@
-cropped_photos
+cropped_photos/*
+output_images/*
 Extra_models
 model_building
-output_images
 object_detection/
 __pycache__
 test.jpg

@@ -257,8 +257,8 @@ del sorted_contour_standard
 # prepare the object detector
 detector = CustomObjectDetection()
 detector.setModelTypeAsYOLOv3()
-detector.setModelPath("object_detection/models/detection_model-ex-001--loss-0054.676.h5")
-detector.setJsonPath("object_detection/json/detection_config.json")
+detector.setModelPath("/home/object_detection/models/detection_model-ex-001--loss-0054.676.h5")
+detector.setJsonPath("/home/object_detection/json/detection_config.json")
 detector.loadModel()
 
 for i in range(len(contours)):

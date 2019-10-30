@@ -100,54 +100,7 @@ class Contour:
             return False
         else:
             return True
-    def getSize_old(self, theta=range(0,91)):
-        size = [[] for lw in range(0,91)] #init size for lw vectors at each theta
-        sz = None # initialize the sz variable otherwise it will explode on the first iteration
-        for angle in theta: 
-            #convert theta to radians
-            th = angle * np.pi /180
-            #compute rotation matrix
-            rot = np.array([
-                    [np.cos(th), np.sin(th)],
-                    [(-1)*np.sin(th), np.cos(th)],
-                    ])
-            #obtain distances by multiplying pts_{n by 2} and rot (rotation matrix)
-            dists = np.dot(p, rot) # n by 2 matrix
-            lengths = [[] for l in range(len(p))] # init lengths list
-            widths = [[] for l in range(len(p))] # init widths list
-            for l_row in range(0, len(p)):
-                lengths[l_row] = dists[l_row][0] # grab all "lengths"
-            for w_row in range(0, len(p)):
-                widths[w_row] = dists[w_row][1] # grab all "widths"
-            l = max(lengths) - min(lengths) # length distance between pts
-            w = max(widths) - min(widths) # width distance between pts
-            size[angle] = [l, w] # l w vector for each theta
-            #print("sz: %s" % sz)
-            #print("type(sz) == %s" % type(sz))
-            #print("np.amax(size, axis=0): %s" % np.amax(size, axis=0))
-            #print("type(np.amax(size, axis=0)) == %s" % type(np.amax(size, axis=0)))
-            #print("sz != np.amax(size, axis=0): %s" % sz != np.amax(size, axis=0))
-            #print(sz != np.amax(size, axis=0))
-            if sz != list(np.amax(size, axis=0)): # Satisfaction of this condition implies that the value of sz has changed
-                sz = list(np.amax(size, axis=0)) # maximum length width for size of object
-                max_length_index = lengths.index(max(lengths)) # in the array p, this is the index where we find one of the points along the contour that defines the length
-                min_length_index = lengths.index(min(lengths)) # in the array p, this is the index where we find one of the points along the contour that defines the length
-                max_width_index = widths.index(max(widths)) # in the array p, this is the index where we find one of the points along the contour that defines the width
-                min_width_index = widths.index(min(widths)) # in the array p, this is the index where we find one of the points along the contour that defines the width
-                max_length_coord = tuple(p[max_length_index]) # These are for the sake of drawing the lines later
-                min_length_coord = tuple(p[min_length_index])
-                max_width_coord = tuple(p[max_width_index])
-                min_width_coord = tuple(p[min_width_index])
-                length = nanmax([sz[0], sz[1]])
-                width = nanmin([sz[0], sz[1]])
-        self.length = round(length, 2)
-        self.width = round(width, 2)
-        self.max_length_coord = max_length_coord
-        self.min_length_coord = min_length_coord
-        self.max_width_coord = max_width_coord
-        self.min_width_coord = min_width_coord
-        return {'length':length,'width':width}
-    def getSize(self):
+    def getLength(self):
         '''
         Using the method of getting the max distance across and a nearly orthogonal vector of max distance to that one
         Hard to explain in words
@@ -168,59 +121,53 @@ class Contour:
         
         self.min_length_coord = tuple(self.points[L_row])
         self.max_length_coord = tuple(self.points[L_col])
+        self.length_coords = [self.min_length_coord, self.max_length_coord]
+        self.length_vector = np.array(self.max_length_coord) - np.array(self.min_length_coord)
+        self.unit_length_vector = self.length_vector / norm(self.length_vector)      
+ 
+        return self.length
+    def getWidth(self):
+        # length axis represents a unit vector along the direction where we found the longest distance over the contour
+        # length_axis = (np.array(p[L_col]) - np.array(p[L_row])) / norm(np.array(p[L_col]) - np.array(p[L_row]))
+        '''above will be replaced wityh self.unit_length_vector'''
+        # length_axis = self.unit_length_vector
+       
+        # all_vecs will be an list of vectors that are all the combinations of vectors that pass over the contour area
+        all_vecs = []
+        coordinates = []
+        for i in range(0, len(self.points) - 1):
+            for j in range(i + 1, len(self.points)):
+                all_vecs.append(np.array(self.points[i]) - np.array(self.points[j]))
+                coordinates.append([tuple(self.points[i]), tuple(self.points[j])])
         
-        # If the length is too small, then the program must have mistakenly detected an oyster.
-        # which would make sense given the minimum percentage probability that we currently have set (10%)
-        if self.length > 25:
-            # length axis represents a unit vector along the direction where we found the longest distance over the contour
-            length_axis = (np.array(p[L_col]) - np.array(p[L_row])) / norm(np.array(p[L_col]) - np.array(p[L_row]))
-           
-            # all_vecs will be an list of vectors that are all the combinations of vectors that pass over the contour area
-            all_vecs = []
-            for i in range(0, len(self.points)):
-                for j in range(i, len(self.points)):
-                    all_vecs.append(np.array(self.points[i]) - np.array(self.points[j]))
-            
-            # make it a column of a pandas dataframe
-            vectors_df = DataFrame({'all_vecs': all_vecs})
-            
-            # Here we normalize all those vectors to prepare to take the dot product with the vector called "length vector"
-            # Dot product will be used to determine orthogonality
-            vectors_df['all_vecs_normalized'] = vectors_df.all_vecs.apply(lambda x: x / norm(x))
+        # make it a column of a pandas dataframe
+        vectors_df = DataFrame({'all_vecs': all_vecs, 'coordinates': coordinates})
+        
+        # Here we normalize all those vectors to prepare to take the dot product with the vector called "length vector"
+        # Dot product will be used to determine orthogonality
+        vectors_df['all_vecs_normalized'] = vectors_df.all_vecs.apply(lambda x: x / norm(x))
 
-            # Take the dot product
-            vectors_df['dot_product'] = vectors_df.all_vecs_normalized.apply(lambda x: np.dot(x, length_axis))
-            #vectors_df['orthogonal'] = vectors_df.dot_product.apply(lambda x: x < 0.15)
-            
-            # get the norm of those vectors that pass over the contour if they are "orthogonal enough" to the "length axis" or else give it a np.nan value
-            # A perfectly orthogonal vector to the length axis will produce a dot product of zero
-            vectors_df['widths'] = vectors_df.apply(lambda x: norm(x['all_vecs']) if x['dot_product'] < 0.15 else np.nan, axis = 1)
+        # Take the dot product
+        #vectors_df['dot_product'] = vectors_df.all_vecs_normalized.apply(lambda x: np.dot(x, length_axis))
+        vectors_df['dot_product'] = vectors_df.all_vecs_normalized.apply(lambda x: np.dot(x, self.unit_length_vector))
+        #vectors_df['orthogonal'] = vectors_df.dot_product.apply(lambda x: x < 0.15)
+       
+        vectors_df['norms'] = vectors_df.all_vecs.apply(lambda x: norm(x))
 
-            print(vectors_df.head())
-            print(vectors_df[~isnull(vectors_df.widths)].widths.tolist())
-
-            # Make a matrix out of it to grab indices where the max "width" was created
-            # After that it is the same workflow as getting length.
-            # The idea is to get lengths of all vectors that pass over the contour area, then replace ones that are not orthogonal to the length with "np.nan"s
-            # Then with that set, take the maximum excluding the np.nan's
-            widths = squareform(np.array(vectors_df.widths.tolist()))
-            self.width = round(nanmax(widths), 2)
-            [W_row, W_col] = unravel_index(argmax(widths), widths.shape)
-            self.min_width_coord = tuple(self.points[W_row])
-            self.max_width_coord = tuple(self.points[W_col])
-            print(self.min_width_coord)
-
-            print(self.max_width_coord)
-            print(self.min_length_coord)
-            print(self.max_length_coord)
+        if any(vectors_df.dot_product < 0.15):
+            # allowing dot product to be up to 0.15 allows the length and width to have an angle of 81.37 to 90 degrees between each other
+            self.width = nanmax(vectors_df[vectors_df.dot_product < 0.15].norms)
+            self.width_coords = vectors_df[vectors_df.norms == self.width].coordinates.tolist()[0]
         else:
-            print("this contour is most likely not an oyster due to unusually short length")
+            self.width = None
+            self.width_coords = None
+     
 
     def drawLengthAndWidth(self, image):
         "image represents the image we are drawing on"
-        cv.line(image, self.min_length_coord, self.max_length_coord, (0,255,0))
-        cv.line(image, self.min_width_coord, self.max_width_coord, (0,255,0))
-        cv.putText(image, "L:%spx, W:%spx" % (self.length, self.width), self.max_length_coord, cv.FONT_HERSHEY_PLAIN, 1, (0,0,255), 2)
+        cv.line(image, self.length_coords[0], self.length_coords[1], (0,255,0))
+        cv.line(image, self.width_coords[0], self.width_coords[1], (0,255,0))
+        cv.putText(image, "L:%spx, W:%spx" % (self.length, self.width), self.length_coords[1], cv.FONT_HERSHEY_PLAIN, 1, (0,0,255), 2)
         return None
         
 
@@ -286,14 +233,20 @@ for i in range(len(contours)):
     cropped_path = "cropped_photos/contour-%s.jpg" % i
     contour.crop_window(path=cropped_path,image=im,cushion=7) # path argument is cropped_path, cushion argument is 15 pixels
     if cv.imread(cropped_path) is not None:
-        if contour.matchOysterShape(contour_standard) and contour.containsOysters(path=cropped_path, detector=detector):
-            contour.getSize()
-            if contour.length > 25:
-                print("contour %s represents and oyster of length %s and width %s" % (i, contour.length, contour.width))
-                contour.drawLengthAndWidth(image=im)
+        contour.getLength()
+        if contour.length > 40:
+            if contour.matchOysterShape(contour_standard) and contour.containsOysters(path=cropped_path, detector=detector):
+                contour.getWidth()
+                if contour.width is not None:
+                    print("contour %s represents and oyster of length %s and width %s" % (i, contour.length, contour.width))
+                    contour.drawLengthAndWidth(image=im)
+                else:
+                    print("unable to get the width of contour %s" % i)
+                    continue
             else:
                 continue
         else:
+            print("skipping contour %s due to unusually short length" % i)
             continue
     else:
         continue
@@ -462,7 +415,59 @@ cv.imwrite("output_images/"+str(TIMESTAMP)+"-finaloutput.jpg", im)
     cv.line(im, tuple(p[I_row]), tuple(p[I_col]), (0, 0, 255), 2)
     
     print("p[I_row]: %s, p[I_col]: %s" % (p[I_row], p[I_col]))
-    
+   
+
+
+
+
+# From the contour class. This is based on the code from that stack overflow post that Zaib found 
+    def getSize_old(self, theta=range(0,91)):
+        size = [[] for lw in range(0,91)] #init size for lw vectors at each theta
+        sz = None # initialize the sz variable otherwise it will explode on the first iteration
+        for angle in theta: 
+            #convert theta to radians
+            th = angle * np.pi /180
+            #compute rotation matrix
+            rot = np.array([
+                    [np.cos(th), np.sin(th)],
+                    [(-1)*np.sin(th), np.cos(th)],
+                    ])
+            #obtain distances by multiplying pts_{n by 2} and rot (rotation matrix)
+            dists = np.dot(p, rot) # n by 2 matrix
+            lengths = [[] for l in range(len(p))] # init lengths list
+            widths = [[] for l in range(len(p))] # init widths list
+            for l_row in range(0, len(p)):
+                lengths[l_row] = dists[l_row][0] # grab all "lengths"
+            for w_row in range(0, len(p)):
+                widths[w_row] = dists[w_row][1] # grab all "widths"
+            l = max(lengths) - min(lengths) # length distance between pts
+            w = max(widths) - min(widths) # width distance between pts
+            size[angle] = [l, w] # l w vector for each theta
+            #print("sz: %s" % sz)
+            #print("type(sz) == %s" % type(sz))
+            #print("np.amax(size, axis=0): %s" % np.amax(size, axis=0))
+            #print("type(np.amax(size, axis=0)) == %s" % type(np.amax(size, axis=0)))
+            #print("sz != np.amax(size, axis=0): %s" % sz != np.amax(size, axis=0))
+            #print(sz != np.amax(size, axis=0))
+            if sz != list(np.amax(size, axis=0)): # Satisfaction of this condition implies that the value of sz has changed
+                sz = list(np.amax(size, axis=0)) # maximum length width for size of object
+                max_length_index = lengths.index(max(lengths)) # in the array p, this is the index where we find one of the points along the contour that defines the length
+                min_length_index = lengths.index(min(lengths)) # in the array p, this is the index where we find one of the points along the contour that defines the length
+                max_width_index = widths.index(max(widths)) # in the array p, this is the index where we find one of the points along the contour that defines the width
+                min_width_index = widths.index(min(widths)) # in the array p, this is the index where we find one of the points along the contour that defines the width
+                max_length_coord = tuple(p[max_length_index]) # These are for the sake of drawing the lines later
+                min_length_coord = tuple(p[min_length_index])
+                max_width_coord = tuple(p[max_width_index])
+                min_width_coord = tuple(p[min_width_index])
+                length = nanmax([sz[0], sz[1]])
+                width = nanmin([sz[0], sz[1]])
+        self.length = round(length, 2)
+        self.width = round(width, 2)
+        self.max_length_coord = max_length_coord
+        self.min_length_coord = min_length_coord
+        self.max_width_coord = max_width_coord
+        self.min_width_coord = min_width_coord
+        return {'length':length,'width':width}
     
 '''
 '''
@@ -503,17 +508,17 @@ def get_size(p, theta=range(0,91)): #input is set of points for ONE contour
         l = max(length) - min(length) # length distance between pts
         w = max(width) - min(width) # width distance between pts
         size[angle] = [l, w] # l w vector for each theta
-	if sz != np.amax(size, axis=0): # Satisfaction of this condition implies that the value of sz has changed
+    if sz != np.amax(size, axis=0): # Satisfaction of this condition implies that the value of sz has changed
             sz = np.amax(size, axis=0) # maximum length width for size of object
-	    max_length_index = length.index(max(length)) # in the array p, this is the index where we find one of the points along the contour that defines the length
-	    min_length_index = length.index(min(length)) # in the array p, this is the index where we find one of the points along the contour that defines the length
-	    max_width_index = length.index(max(width)) # in the array p, this is the index where we find one of the points along the contour that defines the width
-	    min_width_index = length.index(min(width)) # in the array p, this is the index where we find one of the points along the contour that defines the width
-	    max_length_coord = tuple(p[max_length_index]) # These are for the sake of drawing the lines later
-	    min_length_coord = tuple(p[min_length_index])
-	    max_width_coord = tuple(p[max_width_index])
-	    min_width_coord = tuple(p[min_width_index])
-	    length = sz[0]
+        max_length_index = length.index(max(length)) # in the array p, this is the index where we find one of the points along the contour that defines the length
+        min_length_index = length.index(min(length)) # in the array p, this is the index where we find one of the points along the contour that defines the length
+        max_width_index = length.index(max(width)) # in the array p, this is the index where we find one of the points along the contour that defines the width
+        min_width_index = length.index(min(width)) # in the array p, this is the index where we find one of the points along the contour that defines the width
+        max_length_coord = tuple(p[max_length_index]) # These are for the sake of drawing the lines later
+        min_length_coord = tuple(p[min_length_index])
+        max_width_coord = tuple(p[max_width_index])
+        min_width_coord = tuple(p[min_width_index])
+        length = sz[0]
             width = sz[1]
     
 

@@ -28,7 +28,7 @@ else:
 
 computervision_client = ComputerVisionClient(endpoint, CognitiveServicesCredentials(subscription_key))
 
-remote_image_url = "http://data.sccwrp.org/tmp/oysters/2019_08_09_0150.JPG"
+remote_image_url = "http://data.sccwrp.org/tmp/oysters/IMG_9823.JPG"
 
 
 # Call API with URL and raw response (allows you to get the operation location)
@@ -59,7 +59,7 @@ if get_printed_text_results.status == TextOperationStatusCodes.succeeded:
             text_results[line.text] = line.bounding_box
             print()
 
-image = cv.imread("/unraid/photos/OAImageRecognition/2019_08_09_0150.JPG")
+image = cv.imread("/unraid/photos/OAImageRecognition/IMG_9823.JPG")
 print(image)
 for key in text_results.keys(): # recall that the value associated with each key is a list
     # coords = coordinates. each list in the dictionary are the sets of pixel points for the bounding box of recognized text
@@ -73,6 +73,6 @@ for key in text_results.keys(): # recall that the value associated with each key
     del coords
 
 
-cv.imwrite("cropped_photos/2019_08_09_0150-boxed.jpg", image)
+cv.imwrite("cropped_photos/IMG_9823-boxed.jpg", image)
 
 

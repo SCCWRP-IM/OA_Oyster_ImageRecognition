@@ -36,7 +36,7 @@ else:
 computervision_client = ComputerVisionClient(endpoint, CognitiveServicesCredentials(subscription_key))
 
 # URL to the image we are analyzing
-remote_image_url = "http://data.sccwrp.org/tmp/oysters/2019_08_09_0150.JPG"
+remote_image_url = "http://data.sccwrp.org/tmp/oysters/IMG_9823.JPG"
 
 # Call API with URL and raw response (allows you to get the operation location)
 recognize_printed_results = computervision_client.batch_read_file(remote_image_url,  raw=True)
@@ -63,13 +63,81 @@ if get_printed_text_results.status == TextOperationStatusCodes.succeeded:
         for line in text_result.lines:
             print(line.text)
             print(line.bounding_box)
-            text_results[line.text] = line.bounding_box
+            text_results[line.text] = [int(x) for x in line.bounding_box]
             print()
 
-if 'AGUNTIC' in text_results.keys():
-    text_result['AQUATIC'] = text_result['AGUNTIC']
-    del text_result['AGUNTIC']
+
+oyster_species = None
+species_text = None
+species_number = None
+
+for key in text_results.keys():
+    if 'pacific' in key.lower():
+        oyster_species = 'Pacific'
+        species_text = key
+        species_number = re.split('\s+', species_text)[0]
+    elif 'olympiad' in key.lower():
+        oyster_species = 'Olympiad'
+        species_text = key
+        species_number = re.split('\s+', species_text)[0]
+    else:
+        print("unable to identify oyster species")
     
+
+# On the ruler, the AQUATIC or ECO-SYSTEMS,INC. text appeared to be about 30mm maybe 30.5
+# the bounding box typically has a little room around it so I think we can go ahead and say 30.5mm    
+
+if "ECO-SYSTEMS,INC." in text_results.keys():
+    # Eco-systems,inc. seemed to be most reliable in terms of the box being tight on the text.
+    min_x = min([x for x in text_results['ECO-SYSTEMS,INC.'] if text_results['ECO-SYSTEMS,INC.'].index(x) % 2 == 0])
+    max_x = max([x for x in text_results['ECO-SYSTEMS,INC.'] if text_results['ECO-SYSTEMS,INC.'].index(x) % 2 == 0])
+    min_y = min([y for y in text_results['ECO-SYSTEMS,INC.'] if text_results['ECO-SYSTEMS,INC.'].index(y) % 2 == 1])
+    max_y = max([y for y in text_results['ECO-SYSTEMS,INC.'] if text_results['ECO-SYSTEMS,INC.'].index(y) % 2 == 1])
+    pixel_length = max([max_y - min_y, max_x - min_x])   
+    mm_pixel_ratio = np.true_divide(30.5, pixel_length)
+ 
+elif set(['AGUNTIC', 'AQUATIC']).intersection(set(text_results.keys())) != set():
+    if 'AGUNTIC' in text_results.keys():
+        text_results['AQUATIC'] = text_results['AGUNTIC']
+        del text_results['AGUNTIC']
+    
+    min_x = min([x for x in text_results['AQUATIC'] if text_results['AQUATIC'].index(x) % 2 == 0])
+    max_x = max([x for x in text_results['AQUATIC'] if text_results['AQUATIC'].index(x) % 2 == 0])
+    min_y = min([y for y in text_results['AQUATIC'] if text_results['AQUATIC'].index(y) % 2 == 1])
+    max_y = max([y for y in text_results['AQUATIC'] if text_results['AQUATIC'].index(y) % 2 == 1])
+    pixel_length = max([max_y - min_y, max_x - min_x])
+    mm_pixel_ratio = np.true_divide(30.5, pixel_length)
+
+else:
+    # If those aren't recognized, we fall back on text that always has to be in there (if they took the photo correctly
+    min_x = min([x for x in text_results[species_text] if text_results[species_text].index(x) % 2 == 0])
+    max_x = max([x for x in text_results[species_text] if text_results[species_text].index(x) % 2 == 0])
+    min_y = min([y for y in text_results[species_text] if text_results[species_text].index(y) % 2 == 1])
+    max_y = max([y for y in text_results[species_text] if text_results[species_text].index(y) % 2 == 1])
+    pixel_length = max([max_y - min_y, max_x - min_x])   
+
+# First need to talk to Darrin about how I can physically measure these things.
+# Didn't find them in the Exposure lab.
+''' 
+    if oyster_species = 'Pacific':
+        if len(species_number == 1):
+            mm_pixel_ratio = 
+        elif len(species_number == 2):
+            mm_pixel_ratio = 
+        else:
+            print("unable to get millimeter to pixel ratio")
+    elif oyster_species = 'Olympiad':
+        if len(species_number == 1):
+            mm_pixel_ratio = 
+        elif len(species_number == 2):
+            mm_pixel_ratio = 
+        else:
+            print("unable to get millimeter to pixel ratio")
+        
+    else:
+        print("unable to get millimeter to pixel ratio")
+'''
+                    
 
 
 
@@ -222,7 +290,7 @@ class Contour:
         return None
         
 
-im = cv.imread('photos/2019_08_08_0060.jpg')
+im = cv.imread('/unraid/photos/OAImageRecognition/IMG_9823.jpg')
 im = image_resize(im, height = 800)
 
 

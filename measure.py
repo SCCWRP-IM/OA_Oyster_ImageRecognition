@@ -156,8 +156,9 @@ class Contour:
 
         if any(vectors_df.dot_product < 0.15):
             # allowing dot product to be up to 0.15 allows the length and width to have an angle of 81.37 to 90 degrees between each other
-            self.width = nanmax(vectors_df[vectors_df.dot_product < 0.15].norms)
-            self.width_coords = vectors_df[vectors_df.norms == self.width].coordinates.tolist()[0]
+            width = nanmax(vectors_df[vectors_df.dot_product < 0.15].norms)
+            self.width_coords = vectors_df[vectors_df.norms == width].coordinates.tolist()[0]
+            self.width = round(width, 2)
         else:
             self.width = None
             self.width_coords = None

@@ -7,4 +7,4 @@ __pycache__
 test.jpg
 *.h5
 testing/
-
+._DS_Store

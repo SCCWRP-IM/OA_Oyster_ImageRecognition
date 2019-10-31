@@ -11,6 +11,7 @@ from imageai.Detection.Custom import CustomObjectDetection
 import time
 import os
 import sys
+import re
 
 # Get the pixels per millimeter ratio
 from azure.cognitiveservices.vision.computervision import ComputerVisionClient
@@ -36,7 +37,7 @@ else:
 computervision_client = ComputerVisionClient(endpoint, CognitiveServicesCredentials(subscription_key))
 
 # URL to the image we are analyzing
-remote_image_url = "http://data.sccwrp.org/tmp/oysters/IMG_9823.JPG"
+remote_image_url = "http://data.sccwrp.org/tmp/oysters/IMG_9823-resized.JPG"
 
 # Call API with URL and raw response (allows you to get the operation location)
 recognize_printed_results = computervision_client.batch_read_file(remote_image_url,  raw=True)
@@ -76,17 +77,19 @@ for key in text_results.keys():
         oyster_species = 'Pacific'
         species_text = key
         species_number = re.split('\s+', species_text)[0]
-    elif 'olympiad' in key.lower():
-        oyster_species = 'Olympiad'
+        print("These are Pacific Oysters")
+        break
+    elif 'olympia' in key.lower():
+        oyster_species = 'Olympia'
         species_text = key
         species_number = re.split('\s+', species_text)[0]
+        print("These are Olympia Oysters")
+        break
     else:
-        print("unable to identify oyster species")
-    
+        continue
 
-# On the ruler, the AQUATIC or ECO-SYSTEMS,INC. text appeared to be about 30mm maybe 30.5
-# the bounding box typically has a little room around it so I think we can go ahead and say 30.5mm    
 
+# On the ruler, the AQUATIC or ECO-SYSTEMS,INC. text appeared to be about 3cm
 if "ECO-SYSTEMS,INC." in text_results.keys():
     # Eco-systems,inc. seemed to be most reliable in terms of the box being tight on the text.
     min_x = min([x for x in text_results['ECO-SYSTEMS,INC.'] if text_results['ECO-SYSTEMS,INC.'].index(x) % 2 == 0])
@@ -94,7 +97,8 @@ if "ECO-SYSTEMS,INC." in text_results.keys():
     min_y = min([y for y in text_results['ECO-SYSTEMS,INC.'] if text_results['ECO-SYSTEMS,INC.'].index(y) % 2 == 1])
     max_y = max([y for y in text_results['ECO-SYSTEMS,INC.'] if text_results['ECO-SYSTEMS,INC.'].index(y) % 2 == 1])
     pixel_length = max([max_y - min_y, max_x - min_x])   
-    mm_pixel_ratio = np.true_divide(30.5, pixel_length)
+    cm_pixel_ratio = np.true_divide(3, pixel_length)
+    print("ECO-SYSTEMS,INC. was a length of %s pixels" % pixel_length)
  
 elif set(['AGUNTIC', 'AQUATIC']).intersection(set(text_results.keys())) != set():
     if 'AGUNTIC' in text_results.keys():
@@ -106,7 +110,8 @@ elif set(['AGUNTIC', 'AQUATIC']).intersection(set(text_results.keys())) != set()
     min_y = min([y for y in text_results['AQUATIC'] if text_results['AQUATIC'].index(y) % 2 == 1])
     max_y = max([y for y in text_results['AQUATIC'] if text_results['AQUATIC'].index(y) % 2 == 1])
     pixel_length = max([max_y - min_y, max_x - min_x])
-    mm_pixel_ratio = np.true_divide(30.5, pixel_length)
+    cm_pixel_ratio = np.true_divide(3, pixel_length)
+    print("Aquatic was a length of %s pixels" % pixel_length)
 
 else:
     # If those aren't recognized, we fall back on text that always has to be in there (if they took the photo correctly
@@ -121,16 +126,16 @@ else:
 ''' 
     if oyster_species = 'Pacific':
         if len(species_number == 1):
-            mm_pixel_ratio = 
+            cm_pixel_ratio = 
         elif len(species_number == 2):
-            mm_pixel_ratio = 
+            cm_pixel_ratio = 
         else:
             print("unable to get millimeter to pixel ratio")
     elif oyster_species = 'Olympiad':
         if len(species_number == 1):
-            mm_pixel_ratio = 
+            cm_pixel_ratio = 
         elif len(species_number == 2):
-            mm_pixel_ratio = 
+            cm_pixel_ratio = 
         else:
             print("unable to get millimeter to pixel ratio")
         
@@ -184,7 +189,8 @@ class Contour:
         self.min_x = nanmin([x[0] - cushion for x in self.points] + [0])
         self.min_y = nanmin([y[1] - cushion for y in self.points] + [0])
         self.window = image[self.min_x:self.max_x, self.min_y:self.max_y]
-        cv.imwrite(path, self.window)
+        #cv.imwrite(path, self.window)
+        cv.imwrite(path, image)
         return None
     def containsOysters(self, path, detector):
         try:
@@ -230,7 +236,7 @@ class Contour:
         # input into an array
         D = squareform(D);
         # find max distance and which points this corresponds to
-        self.length = round(nanmax(D), 2)
+        self.pixellength = round(nanmax(D), 2)
         # called I_row and I_col since it is grabbing the "ij" location in a matrix where the max occurred.
         # the row number where it occurs represents one of the indices in the original self.points array where one of the points on the contour lies
         # the column number would be the point on the opposite side of the contour
@@ -242,12 +248,12 @@ class Contour:
         self.length_coords = [self.min_length_coord, self.max_length_coord]
         self.length_vector = np.array(self.max_length_coord) - np.array(self.min_length_coord)
         self.unit_length_vector = self.length_vector / norm(self.length_vector)      
- 
+        self.length = round(self.pixellength * cm_pixel_ratio, 2) # px * mm / px yields units of mm
         return self.length
     def getWidth(self):
         # length axis represents a unit vector along the direction where we found the longest distance over the contour
         # length_axis = (np.array(p[L_col]) - np.array(p[L_row])) / norm(np.array(p[L_col]) - np.array(p[L_row]))
-        '''above will be replaced wityh self.unit_length_vector'''
+        '''above will be replaced with self.unit_length_vector'''
         # length_axis = self.unit_length_vector
        
         # all_vecs will be an list of vectors that are all the combinations of vectors that pass over the contour area
@@ -276,9 +282,10 @@ class Contour:
             # allowing dot product to be up to 0.15 allows the length and width to have an angle of 81.37 to 90 degrees between each other
             width = nanmax(vectors_df[vectors_df.dot_product < 0.15].norms)
             self.width_coords = vectors_df[vectors_df.norms == width].coordinates.tolist()[0]
-            self.width = round(width, 2)
+            self.pixelwidth = round(width, 2)
+            self.width = round(self.pixelwidth * cm_pixel_ratio, 2) # pixels times mm / pixels yields units of millimeters
         else:
-            self.width = None
+            self.pixelwidth = None
             self.width_coords = None
      
 
@@ -286,20 +293,21 @@ class Contour:
         "image represents the image we are drawing on"
         cv.line(image, self.length_coords[0], self.length_coords[1], (0,255,0))
         cv.line(image, self.width_coords[0], self.width_coords[1], (0,255,0))
-        cv.putText(image, "L:%spx, W:%spx" % (self.length, self.width), self.length_coords[1], cv.FONT_HERSHEY_PLAIN, 1, (0,0,255), 2)
+        cv.putText(image, "L:%scm, W:%scm" % (self.length, self.width), self.length_coords[1], cv.FONT_HERSHEY_PLAIN, 1, (0,0,255), 2)
         return None
         
 
-im = cv.imread('/unraid/photos/OAImageRecognition/IMG_9823.jpg')
-im = image_resize(im, height = 800)
+TIMESTAMP = str(time.time() * 1000)
+im = cv.imread('photos/IMG_9823-resized.jpg')
+#im = image_resize(im, height = 800) # I have a strong feeling that this is significantly throwing off the calculations
 
 
 imgray = cv.cvtColor(im,cv.COLOR_BGR2GRAY)
-imgray = cv.GaussianBlur(imgray, (3,3), 0)
+imgray = cv.GaussianBlur(imgray, (1,1), 0)
 ret,thresh = cv.threshold(imgray, 185, 255, cv.THRESH_BINARY_INV) # change 1st number fr shadows of shapes
 cv.imwrite("output_images/threshed.jpg", thresh)
 contours, hierarchy = cv.findContours(thresh,cv.RETR_TREE,cv.CHAIN_APPROX_SIMPLE)
-
+print("Detected %s contours" % len(contours))
 
 # Here we get a generic oyster shape to match with the detected contours from the input image
 oyster_outline = cv.imread("photos/OysterShape.jpg")
@@ -327,7 +335,9 @@ detector.setModelPath("/home/object_detection/models/detection_model-ex-001--los
 detector.setJsonPath("/home/object_detection/json/detection_config.json")
 detector.loadModel()
 
+oystercontours = []
 for i in range(len(contours)):
+    print("Contour #%s" % i)
     # here we grab the contour
     cv.drawContours(im,contours[i],-1,(0,255,0),3)
 
@@ -353,12 +363,13 @@ for i in range(len(contours)):
     contour.crop_window(path=cropped_path,image=im,cushion=7) # path argument is cropped_path, cushion argument is 15 pixels
     if cv.imread(cropped_path) is not None:
         contour.getLength()
-        if contour.length > 40:
+        if contour.pixellength > 40:
             if contour.matchOysterShape(contour_standard) and contour.containsOysters(path=cropped_path, detector=detector):
                 contour.getWidth()
                 if contour.width is not None:
-                    print("contour %s represents and oyster of length %s and width %s" % (i, contour.length, contour.width))
+                    print("contour %s represents and oyster of length %smm and width %smm" % (i, contour.length, contour.width))
                     contour.drawLengthAndWidth(image=im)
+                    oystercontours.append(i)
                 else:
                     print("unable to get the width of contour %s" % i)
                     continue
@@ -369,8 +380,15 @@ for i in range(len(contours)):
             continue
     else:
         continue
+    del contour
 
 cv.imwrite("output_images/"+str(TIMESTAMP)+"-finaloutput.jpg", im)
+
+image_resized = image_resize(im, height = 800)
+cv.imwrite("output_images/"+str(TIMESTAMP)+"-finaloutput-resized.jpg", image_resized)
+
+
+
 
 
 

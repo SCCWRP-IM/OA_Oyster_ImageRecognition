@@ -7,7 +7,7 @@ __pycache__
 test.jpg
 *.h5
 testing/
-._DS_Store
+.DS_Store
 photos/*.JPG
 width_debug
 

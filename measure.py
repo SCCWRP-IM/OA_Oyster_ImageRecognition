@@ -273,15 +273,15 @@ class Contour:
 
         # Take the dot product
         #vectors_df['dot_product'] = vectors_df.all_vecs_normalized.apply(lambda x: np.dot(x, length_axis))
-        vectors_df['dot_product'] = vectors_df.all_vecs_normalized.apply(lambda x: np.dot(x, self.unit_length_vector))
+        vectors_df['dot_product'] = vectors_df.all_vecs_normalized.apply(lambda x: abs(np.dot(x, self.unit_length_vector)))
         #vectors_df['orthogonal'] = vectors_df.dot_product.apply(lambda x: x < 0.15)
        
         vectors_df['norms'] = vectors_df.all_vecs.apply(lambda x: norm(x))
 
-        if any(vectors_df.dot_product < 0.15):
+        if any(vectors_df.dot_product < 0.075):
             # allowing dot product to be up to 0.15 allows the length and width to have an angle of 81.37 to 90 degrees between each other
-            width = nanmax(vectors_df[vectors_df.dot_product < 0.15].norms)
-            self.width_coords = vectors_df[vectors_df.norms == width].coordinates.tolist()[0]
+            width = nanmax(vectors_df[vectors_df.dot_product < 0.075].norms)
+            self.width_coords = vectors_df[vectors_df.norms == width].sort_values('dot_product').coordinates.tolist()[0]
             self.pixelwidth = round(width, 2)
             self.width = round(self.pixelwidth * cm_pixel_ratio, 2) # pixels times mm / pixels yields units of millimeters
         else:

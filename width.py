@@ -96,7 +96,6 @@ unit_length_vector = length_vector / norm(length_vector)
 
 # draw the line that is being used to measure length, so we get a visual of if it is doing what it is supposed to be doing or not.
 cv.line(im, min_length_coord, max_length_coord, (0,255,0))
-cv.imwrite('output_images/debug1.jpg', im)
 
 
 '''
@@ -120,20 +119,33 @@ vectors_df['all_vecs_normalized'] = vectors_df.all_vecs.apply(lambda x: x / norm
 
 # Take the dot product
 #vectors_df['dot_product'] = vectors_df.all_vecs_normalized.apply(lambda x: np.dot(x, length_axis))
-vectors_df['dot_product'] = vectors_df.all_vecs_normalized.apply(lambda x: np.dot(x, unit_length_vector))
+vectors_df['dot_product'] = vectors_df.all_vecs_normalized.apply(lambda x: abs(np.dot(x, unit_length_vector)))
 #vectors_df['orthogonal'] = vectors_df.dot_product.apply(lambda x: x < 0.15)
 
 vectors_df['norms'] = vectors_df.all_vecs.apply(lambda x: norm(x))
 
-width = nanmax(vectors_df[vectors_df.dot_product < 0.15].norms)
-width_coords = vectors_df[vectors_df.norms == width].coordinates.tolist()[0]
+width = nanmax(vectors_df[vectors_df.dot_product < 0.01].norms)
+width_coords = vectors_df[vectors_df.norms == width].sort_values('dot_product').coordinates.tolist()[0]
+min_width_coord = width_coords[0]
+max_width_coord = width_coords[1]
+width_vector = np.array(max_width_coord) - np.array(min_width_coord)
+unit_width_vector = width_vector / norm(width_vector)      
 pixelwidth = round(width, 2)
 
+# Draw the width on the image for a visual of whether we're doing this right or not
+cv.line(im, min_width_coord, max_width_coord, (0,255,0))
+
+print("Length Vector:")
+print(unit_length_vector)
+print("Width Vector:")
+print(unit_width_vector)
+
+print("The dot product of the two is %s" % np.dot(unit_length_vector, unit_width_vector))
+print("The angle between the two is %s degrees" %  (np.arccos(np.dot(unit_length_vector, unit_width_vector)) * 180 / np.pi))
 
 
-
-
-
+# Finally output the image
+cv.imwrite('width_debug/debug1.jpg', im)
 
 
 

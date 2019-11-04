@@ -13,9 +13,11 @@ import os
 #import sys
 import re
 import argparse
+import copy
+
 
 ap = argparse.ArgumentParser()
-ap.add_argument("-i", "--image", required=True,
+ap.add_argument("-i", "--image", required=False,
 	help="path to the input image")
 args = vars(ap.parse_args())
 
@@ -31,6 +33,9 @@ if args["image"]:
     imagename = args["image"]
 else:
     imagename = "IMG_9823"
+
+image_id = copy.deepcopy(imagename)
+imagename += "-resized"
 
 print("imagename: %s" % imagename)
 
@@ -340,13 +345,13 @@ class Contour:
         "image represents the image we are drawing on"
         cv.line(image, self.length_coords[0], self.length_coords[1], (0,255,0))
         cv.line(image, self.width_coords[0], self.width_coords[1], (0,255,0))
-        cv.putText(image, "L:%scm, W:%scm" % (self.length, self.width), self.length_coords[1], cv.FONT_HERSHEY_PLAIN, 1, (0,0,255), 2)
+        #cv.putText(image, "L:%scm, W:%scm" % (self.length, self.width), self.length_coords[1], cv.FONT_HERSHEY_PLAIN, 1, (0,0,255), 2)
         return None
         
 
 TIMESTAMP = str(time.time() * 1000)
 print("reading in image")
-im = cv.imread('/unraid/photos/OAImageRecognition/%s.jpg' % imagename)
+im = cv.imread('/unraid/photos/OAImageRecognition/resized/%s.jpg' % imagename)
 #im = image_resize(im, height = 800) # I have a strong feeling that this is significantly throwing off the calculations
 
 print("grayscaling")
@@ -361,7 +366,7 @@ else:
 print("converting to black and white")
 ret,thresh = cv.threshold(imgray, thresh_value, 255, cv.THRESH_BINARY_INV) # change 1st number fr shadows of shapes
 print("exporting black and white image to jpg")
-cv.imwrite("/unraid/photos/OAImageRecognition/analysis/%s-threshed.jpg" % imagename, thresh)
+#cv.imwrite("/unraid/photos/OAImageRecognition/analysis/%s-threshed.jpg" % imagename, thresh)
 print("finding contours")
 contours, hierarchy = cv.findContours(thresh,cv.RETR_TREE,cv.CHAIN_APPROX_SIMPLE)
 print("Detected %s contours" % len(contours))
@@ -431,7 +436,7 @@ for i in range(len(contours)):
                     cv.drawContours(im,contours[i],-1,(0,255,0),1)
                     contour.drawLengthAndWidth(image=im)
                     oystercontours.append(i)
-                    newrecord = DataFrame({'image_id':[imagename],
+                    newrecord = DataFrame({'image_id':[image_id],
                                         'jar':[jar],
                                         'week':[week],
                                         'species':[oyster_species],
@@ -462,12 +467,12 @@ for i in range(len(contours)):
         continue
     del contour
 
-cv.imwrite("/unraid/photos/OAImageRecognition/analysis/%s-analyzed.jpg" % imagename, im)
+cv.imwrite("/unraid/photos/OAImageRecognition/analysis/%s-analyzed.jpg" % image_id, im)
 
-image_resized = image_resize(im, height = 800)
-cv.imwrite("/unraid/photos/OAImageRecognition/analysis/%s-analyzed-resized.jpg" % imagename, image_resized)
+#image_resized = image_resize(im, height = 800)
+#cv.imwrite("/unraid/photos/OAImageRecognition/analysis/%s-analyzed-resized.jpg" % imagename, image_resized)
 
-output_df.to_csv("/unraid/photos/OAImageRecognition/analysis/%s.csv" % imagename)
+output_df.to_csv("/unraid/photos/OAImageRecognition/analysis/%s.csv" % image_id, index = False)
 
 
 

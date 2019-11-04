@@ -12,6 +12,12 @@ import time
 import os
 import sys
 import re
+import argparse
+
+ap = argparse.ArgumentParser()
+ap.add_argument("-i", "--image", required=True,
+	help="path to the input image")
+args = vars(ap.parse_args())
 
 # Get the pixels per millimeter ratio
 from azure.cognitiveservices.vision.computervision import ComputerVisionClient
@@ -21,7 +27,10 @@ from azure.cognitiveservices.vision.computervision.models import VisualFeatureTy
 from msrest.authentication import CognitiveServicesCredentials
 
 # Here we will define a variable that represents the name of the image that we are analyzing
-imagename = "IMG_9823"
+if args["image"]:
+    imagename = args["image"]
+else:
+    imagename = "IMG_9823"
 
 
 # initialize the output dataframe
@@ -57,7 +66,7 @@ else:
 computervision_client = ComputerVisionClient(endpoint, CognitiveServicesCredentials(subscription_key))
 
 # URL to the image we are analyzing
-remote_image_url = "http://data.sccwrp.org/tmp/oysters/%s-resized.JPG" % imagename
+remote_image_url = "http://data.sccwrp.org/tmp/oysters/%s.JPG" % imagename
 
 # Call API with URL and raw response (allows you to get the operation location)
 recognize_printed_results = computervision_client.batch_read_file(remote_image_url,  raw=True)
@@ -324,7 +333,7 @@ class Contour:
         
 
 TIMESTAMP = str(time.time() * 1000)
-im = cv.imread('photos/%s-resized.jpg' % imagename)
+im = cv.imread('photos/%s.jpg' % imagename)
 #im = image_resize(im, height = 800) # I have a strong feeling that this is significantly throwing off the calculations
 
 
@@ -399,7 +408,7 @@ for i in range(len(contours)):
                 if contour.width is not None:
                     print("contour %s represents and oyster of length %smm and width %smm" % (i, contour.length, contour.width))
                     # here we grab the contour
-                    cv.drawContours(im,contours[i],-1,(0,255,0),3)
+                    cv.drawContours(im,contours[i],-1,(0,255,0),1)
                     contour.drawLengthAndWidth(image=im)
                     oystercontours.append(i)
                     newrecord = DataFrame({'image_id':[imagename],
@@ -432,12 +441,12 @@ for i in range(len(contours)):
         continue
     del contour
 
-cv.imwrite("output_images/%s-finaloutput.jpg" % imagename, im)
+cv.imwrite("/unraid/photos/OAImageRecognition/analysis/%s-analyzed.jpg" % imagename, im)
 
 image_resized = image_resize(im, height = 800)
-cv.imwrite("output_images/%s-finaloutput-resized.jpg" % imagename, image_resized)
+cv.imwrite("/unraid/photos/OAImageRecognition/analysis/%s-analyzed-resized.jpg" % imagename, image_resized)
 
-
+output_df.to_csv("/unraid/photos/OAImageRecognition/analysis/%s.csv" % imagename)
 
 
 

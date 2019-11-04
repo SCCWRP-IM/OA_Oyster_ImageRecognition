@@ -215,307 +215,314 @@ analyzed_imagenames = [str(x).split("/")[-1].split(".")[0].split("-")[0] for x i
 
 
 for imagename in imagenames:
-    image_id = re.sub("-resized", "", imagename)
+    try:
+        image_id = re.sub("-resized", "", imagename)
 
-    print("imagename: %s" % imagename)
-    print("image_id: %s" % image_id)
+        print("imagename: %s" % imagename)
+        print("image_id: %s" % image_id)
 
-    if image_id in analyzed_imagenames:
-        print("skipping image %s because it has already been analyzed" % imagename)
-        continue
-    
-    # initialize the output dataframe
-    output_df = DataFrame({'image_id':[],
-                           'jar':[],
-                           'week':[],
-                           'species':[],
-                           'treatment':[],
-                           'replicate':[],
-                           'oyster_number':[],
-                           'individual_id':[], 
-                           'pixels_per_cm':[],
-                           'length_pixels':[],
-                           'width_pixels':[],
-                           'length_cm':[],
-                           'width_cm':[]
-                        })
-
-
-    # Add your Computer Vision subscription key to your environment variables.
-    if 'COMPUTER_VISION_SUBSCRIPTION_KEY' in os.environ:
-        subscription_key = os.environ['COMPUTER_VISION_SUBSCRIPTION_KEY']
-    else:
-        print("\nSet the COMPUTER_VISION_SUBSCRIPTION_KEY environment variable.\n**Restart your shell or IDE for changes to take effect.**")
-        #sys.exit()
-    # Add your Computer Vision endpoint to your environment variables.
-    if 'COMPUTER_VISION_ENDPOINT' in os.environ:
-        endpoint = os.environ['COMPUTER_VISION_ENDPOINT']
-    else:
-        print("\nSet the COMPUTER_VISION_ENDPOINT environment variable.\n**Restart your shell or IDE for changes to take effect.**")
-        #sys.exit()
-    
-    attempts = 0
-    while attempts < 5:
-        try:
-            # authenticate the API credentials so microsoft knows we have access
-            computervision_client = ComputerVisionClient(endpoint, CognitiveServicesCredentials(subscription_key))
-
-            # URL to the image we are analyzing
-            remote_image_url = "http://data.sccwrp.org/tmp/oysters/%s.JPG" % imagename
-
-            # Call API with URL and raw response (allows you to get the operation location)
-            recognize_printed_results = computervision_client.batch_read_file(remote_image_url,  raw=True)
-
-            # Get the operation location (URL with an ID at the end) from the response
-            operation_location_remote = recognize_printed_results.headers["Operation-Location"]
-            print(operation_location_remote)
-
-            # Grab the ID from the URL
-            operation_id = operation_location_remote.split("/")[-1]
-
-            # Call the "GET" API and wait for it to retrieve the results 
-            while True:
-                get_printed_text_results = computervision_client.get_read_operation_result(operation_id)
-                if get_printed_text_results.status not in ['NotStarted', 'Running']:
-                    break
-                time.sleep(1)
-            break
-        except Exception as e:
-            print("could not run OCR API for image %s." % imagename)
-            print(e)
-            time.sleep(120)
-            attempts += 1
-    if attempts > 4:
-        msg = "Unable to process the OCR API for image %s. Either Microsoft thinks we are calling the API too much, or the link is broken.\n" % imagename
-        msg += "To check if the link is broken, visit http://data.sccwrp.org/tmp/oysters/%s.JPG and see if the image comes up." % imagename
-        f = file.open("/unraid/photos/OAImageRecognition/analysis/%s-error.txt" % imagename, 'w')
-        f.write(msg)
-        f.close() 
-    
-
-    #Print the detected text, line by line
-    # We will also go ahead and store the results in a python dictionary
-    text_results = dict()
-    if get_printed_text_results.status == TextOperationStatusCodes.succeeded:
-        for text_result in get_printed_text_results.recognition_results:
-            for line in text_result.lines:
-                print(line.text)
-                print(line.bounding_box)
-                text_results[line.text] = [int(x) for x in line.bounding_box]
-                print()
-
-
-    oyster_species = None
-    species_text = None
-    species_number = None
-    week = None
-    pH_level = None
-    treatment = None
-
-    for key in text_results.keys():
-        if 'pacific' in key.lower():
-            oyster_species = 'Pacific'
-            species_text = key
-            if "|" in species_text: 
-                species_number = re.split('\|', species_text)[0].strip()
-            else:
-                species_number = re.split('\s+', species_text)[0].strip()
-            print("These are Pacific Oysters")
-        elif 'olympia' in key.lower():
-            oyster_species = 'Olympia'
-            species_text = key
-            if "|" in species_text: 
-                species_number = re.split('\|', species_text)[0].strip()
-            else:
-                species_number = re.split('\s+', species_text)[0].strip()
-            print("These are Olympia Oysters")
-        elif "pH" in key:
-            try:
-                if image_id == '2019_08_08_0100':
-                    week = 2
-                    pH_level = 7.7
-                    treatment = "7.7A0.5"
-                pH_treatment_text = re.split("\s+",key)
-                week = pH_treatment_text[0]
-                pH_level = str(float(pH_treatment_text[pH_treatment_text.index("pH") + 1].strip()))
-                if "fluctuating" in key.lower():
-                    treatment = pH_level + pH_treatment_text[-1][-1] + pH_treatment_text[-1][:-1]
-                elif "constant" in key.lower():
-                    treatment = pH_level + "C"
-                else:
-                    treatment = None
-            except IndexError:
-                pH_level = None
-                treatment = None
-                week = None    
-        else:
+        if image_id in analyzed_imagenames:
+            print("skipping image %s because it has already been analyzed" % imagename)
             continue
-
-    replicate = np.nan
-    jar = np.nan
-    if "initial" in [str(x).lower().strip() for x in text_results.keys()]:
-        replicate = species_number
-    else:
-        jar = species_number
-
-
-    # On the ruler, the AQUATIC or ECO-SYSTEMS,INC. text appeared to be about 3cm
-    if set(["ECO-SYSTEMS,INC.", "ECO-SYSTEMS, INC."]).issubset(set(text_results.keys())):
-        if "ECO-SYSTEMS, INC." in text_results.keys():
-            text_results["ECO-SYSTEMS,INC."] = text_results["ECO-SYSTEMS, INC."]
-            del text_results["ECO-SYSTEMS, INC."]
-        # Eco-systems,inc. seemed to be most reliable in terms of the box being tight on the text.
-        min_x = min([x for x in text_results['ECO-SYSTEMS,INC.'] if text_results['ECO-SYSTEMS,INC.'].index(x) % 2 == 0])
-        max_x = max([x for x in text_results['ECO-SYSTEMS,INC.'] if text_results['ECO-SYSTEMS,INC.'].index(x) % 2 == 0])
-        min_y = min([y for y in text_results['ECO-SYSTEMS,INC.'] if text_results['ECO-SYSTEMS,INC.'].index(y) % 2 == 1])
-        max_y = max([y for y in text_results['ECO-SYSTEMS,INC.'] if text_results['ECO-SYSTEMS,INC.'].index(y) % 2 == 1])
-        pixel_length = max([max_y - min_y, max_x - min_x])   
-        cm_pixel_ratio = np.true_divide(3, pixel_length)
-        print("ECO-SYSTEMS,INC. was a length of %s pixels" % pixel_length)
-        pixels_per_cm = np.true_divide(pixel_length, 3)
-     
-    elif set(['AGUNTIC', 'AQUATIC']).intersection(set(text_results.keys())) != set():
-        if 'AGUNTIC' in text_results.keys():
-            text_results['AQUATIC'] = text_results['AGUNTIC']
-            del text_results['AGUNTIC']
         
-        min_x = min([x for x in text_results['AQUATIC'] if text_results['AQUATIC'].index(x) % 2 == 0])
-        max_x = max([x for x in text_results['AQUATIC'] if text_results['AQUATIC'].index(x) % 2 == 0])
-        min_y = min([y for y in text_results['AQUATIC'] if text_results['AQUATIC'].index(y) % 2 == 1])
-        max_y = max([y for y in text_results['AQUATIC'] if text_results['AQUATIC'].index(y) % 2 == 1])
-        pixel_length = max([max_y - min_y, max_x - min_x])
-        cm_pixel_ratio = np.true_divide(3, pixel_length)
-        print("Aquatic was a length of %s pixels" % pixel_length)
-        pixels_per_cm = np.true_divide(pixel_length, 3)
-
-    else:
-        try:
-            # If those aren't recognized, we fall back on text that always has to be in there (if they took the photo correctly
-            min_x = min([x for x in text_results[species_text] if text_results[species_text].index(x) % 2 == 0])
-            max_x = max([x for x in text_results[species_text] if text_results[species_text].index(x) % 2 == 0])
-            min_y = min([y for y in text_results[species_text] if text_results[species_text].index(y) % 2 == 1])
-            max_y = max([y for y in text_results[species_text] if text_results[species_text].index(y) % 2 == 1])
-            pixel_length = max([max_y - min_y, max_x - min_x])   
-
-            # First need to talk to Darrin about how I can physically measure these things.
-            # NOTE I measured it with the software on the computer that has the microscope attached to it
-         
-            if len(species_number) == 1:
-                cm_pixel_ratio = np.true_divide(1.4, pixel_length)
-            elif len(species_number) == 2:
-                cm_pixel_ratio = np.true_divide(1.65, pixel_length)
-            else:
-                print("unable to get millimeter to pixel ratio") 
-            pixels_per_cm = np.true_divide(1, cm_pixel_ratio)
-        except Exception as e:
-            print("Unable to get centimeter to px ratio")
-            print(e)
-            f = open("/unraid/photos/OAImageRecognition/analysis/%s-error.txt" % image_id, 'w')
-            f.write("unable to measure oysters in image %s. Most likely this error occurred due to a lack of a sample id in the photo, or that the program was unabel to detect the sample id." % image_id)
-            f.close()
-            continue
+        # initialize the output dataframe
+        output_df = DataFrame({'image_id':[],
+                               'jar':[],
+                               'week':[],
+                               'species':[],
+                               'treatment':[],
+                               'replicate':[],
+                               'oyster_number':[],
+                               'individual_id':[], 
+                               'pixels_per_cm':[],
+                               'length_pixels':[],
+                               'width_pixels':[],
+                               'length_cm':[],
+                               'width_cm':[]
+                            })
 
 
+        # Add your Computer Vision subscription key to your environment variables.
+        if 'COMPUTER_VISION_SUBSCRIPTION_KEY' in os.environ:
+            subscription_key = os.environ['COMPUTER_VISION_SUBSCRIPTION_KEY']
+        else:
+            print("\nSet the COMPUTER_VISION_SUBSCRIPTION_KEY environment variable.\n**Restart your shell or IDE for changes to take effect.**")
+            #sys.exit()
+        # Add your Computer Vision endpoint to your environment variables.
+        if 'COMPUTER_VISION_ENDPOINT' in os.environ:
+            endpoint = os.environ['COMPUTER_VISION_ENDPOINT']
+        else:
+            print("\nSet the COMPUTER_VISION_ENDPOINT environment variable.\n**Restart your shell or IDE for changes to take effect.**")
+            #sys.exit()
+        
+        attempts = 0
+        while attempts < 5:
+            try:
+                # authenticate the API credentials so microsoft knows we have access
+                computervision_client = ComputerVisionClient(endpoint, CognitiveServicesCredentials(subscription_key))
 
-            
+                # URL to the image we are analyzing
+                remote_image_url = "http://data.sccwrp.org/tmp/oysters/%s.JPG" % imagename
 
-    TIMESTAMP = str(time.time() * 1000)
-    print("reading in image")
-    im = cv.imread('/unraid/photos/OAImageRecognition/resized/%s.jpg' % imagename)
-    #im = image_resize(im, height = 800) # I have a strong feeling that this is significantly throwing off the calculations
+                # Call API with URL and raw response (allows you to get the operation location)
+                recognize_printed_results = computervision_client.batch_read_file(remote_image_url,  raw=True)
 
-    print("grayscaling")
-    imgray = cv.cvtColor(im,cv.COLOR_BGR2GRAY)
-    #imgray = cv.GaussianBlur(imgray, (1,1), 0)
-    thresh_value = None
-    print("setting threshold value")
-    if oyster_species == 'Pacific':
-        thresh_value = 215
-    else:
-        thresh_value = 175
-    print("converting to black and white")
-    ret,thresh = cv.threshold(imgray, thresh_value, 255, cv.THRESH_BINARY_INV) # change 1st number fr shadows of shapes
-    print("exporting black and white image to jpg")
-    #cv.imwrite("/unraid/photos/OAImageRecognition/analysis/%s-threshed.jpg" % imagename, thresh)
-    print("finding contours")
-    contours, hierarchy = cv.findContours(thresh,cv.RETR_TREE,cv.CHAIN_APPROX_SIMPLE)
-    print("Detected %s contours" % len(contours))
+                # Get the operation location (URL with an ID at the end) from the response
+                operation_location_remote = recognize_printed_results.headers["Operation-Location"]
+                print(operation_location_remote)
 
-    print("looping through contours")
-    oyster_count = 1
-    oystercontours = []
-    for i in range(len(contours)):
-        print("Contour #%s" % i)
+                # Grab the ID from the URL
+                operation_id = operation_location_remote.split("/")[-1]
 
-        # contours are just lists of lists of coordinate points 
-        # (on a basic simple level. I think they are technically np arrays or something)
-        # Anyways, here we are extracting the list of coordinate points that define each contour to then analyze it
-        points = np.ndarray.tolist(contours[i])
+                # Call the "GET" API and wait for it to retrieve the results 
+                while True:
+                    get_printed_text_results = computervision_client.get_read_operation_result(operation_id)
+                    if get_printed_text_results.status not in ['NotStarted', 'Running']:
+                        break
+                    time.sleep(1)
+                break
+            except Exception as e:
+                print("could not run OCR API for image %s." % imagename)
+                print(e)
+                time.sleep(120)
+                attempts += 1
+        if attempts > 4:
+            msg = "Unable to process the OCR API for image %s. Either Microsoft thinks we are calling the API too much, or the link is broken.\n" % imagename
+            msg += "To check if the link is broken, visit http://data.sccwrp.org/tmp/oysters/%s.JPG and see if the image comes up." % imagename
+            f = file.open("/unraid/photos/OAImageRecognition/analysis/%s-error.txt" % imagename, 'w')
+            f.write(msg)
+            f.close() 
+        
 
-        #change range arg
-        p = [[] for i in range(len(contours[i]))]
+        #Print the detected text, line by line
+        # We will also go ahead and store the results in a python dictionary
+        text_results = dict()
+        if get_printed_text_results.status == TextOperationStatusCodes.succeeded:
+            for text_result in get_printed_text_results.recognition_results:
+                for line in text_result.lines:
+                    print(line.text)
+                    print(line.bounding_box)
+                    text_results[line.text] = [int(x) for x in line.bounding_box]
+                    print()
 
-    # point is a list of lists of lists.
-        # we need only a list of lists
-        for j, coord in enumerate(points):
-            #print(j, coord)
-            p[j] = points[j][0]    
-        del points
-       
-        p = np.array(p)
 
-        contour = Contour(p, im)
-        cropped_path = "cropped_photos/contour-%s.jpg" % i
-        contour.crop_window(path=cropped_path,image=im,cushion=7) # path argument is cropped_path, cushion argument is 15 pixels
-        if cv.imread(cropped_path) is not None:
-            contour.getLength()
-            if contour.pixellength > 40:
-                if contour.matchOysterShape(contour_standard, max_score = 0.35) and contour.containsOysters(path=cropped_path, detector=detector):
-                    contour.getWidth()
-                    if contour.width is not None:
-                        print("contour %s represents and oyster of length %smm and width %smm" % (i, contour.length, contour.width))
-                        # here we grab the contour
-                        cv.drawContours(im,contours[i],-1,(0,255,0),1)
-                        contour.drawLengthAndWidth(image=im)
-                        oystercontours.append(i)
-                        newrecord = DataFrame({'image_id':[image_id],
-                                            'jar':[jar],
-                                            'week':[week],
-                                            'species':[oyster_species],
-                                            'treatment':[treatment],
-                                            'replicate':[replicate],
-                                            'oyster_number':[oyster_count],
-                                            'individual_id':[np.nan], 
-                                            'pixels_per_cm':[pixels_per_cm],
-                                            'length_pixels':[contour.pixellength],
-                                            'width_pixels':[contour.pixelwidth],
-                                            'length_cm':[contour.length],
-                                            'width_cm':[contour.width]
-                                        })
-                        print(newrecord)
-                        output_df = concat([output_df, newrecord], ignore_index = True)
-                        print(output_df)
-                        cv.putText(im, "oyster #%s" % oyster_count, tuple([min([x[0] for x in contour.points]), min([y[1] for y in contour.points])]), cv.FONT_HERSHEY_PLAIN, 1, (0,0,255), 2)
-                        oyster_count += 1
+        oyster_species = None
+        species_text = None
+        species_number = None
+        week = None
+        pH_level = None
+        treatment = None
+
+        for key in text_results.keys():
+            text_results[key.lower()] = text_results[key]
+            del text_results[key]
+            key = key.lower()
+            if 'pacific' in key.lower():
+                oyster_species = 'Pacific'
+                species_text = key
+                if "|" in species_text: 
+                    species_number = re.split('\|', species_text)[0].strip()
+                else:
+                    species_number = re.split('\s+', species_text)[0].strip()
+                print("These are Pacific Oysters")
+            elif 'olympia' in key.lower():
+                oyster_species = 'Olympia'
+                species_text = key
+                if "|" in species_text: 
+                    species_number = re.split('\|', species_text)[0].strip()
+                else:
+                    species_number = re.split('\s+', species_text)[0].strip()
+                print("These are Olympia Oysters")
+            elif "ph" in key:
+                try:
+                    if image_id == '2019_08_08_0100':
+                        week = 2
+                        pH_level = 7.7
+                        treatment = "7.7A0.5"
+                    pH_treatment_text = re.split("\s+",key)
+                    week = pH_treatment_text[0]
+                    pH_level = str(float(pH_treatment_text[pH_treatment_text.index("ph") + 1].strip()))
+                    if "fluctuating" in key.lower():
+                        treatment = pH_level + pH_treatment_text[-1][-1] + pH_treatment_text[-1][:-1]
+                    elif "constant" in key.lower():
+                        treatment = pH_level + "C"
                     else:
-                        print("unable to get the width of contour %s" % i)
+                        treatment = None
+                except IndexError:
+                    pH_level = None
+                    treatment = None
+                    week = None    
+            else:
+                continue
+
+        replicate = np.nan
+        jar = np.nan
+        if "initial" in [str(x).lower().strip() for x in text_results.keys()]:
+            replicate = species_number
+        else:
+            jar = species_number
+
+
+        # On the ruler, the AQUATIC or ECO-SYSTEMS,INC. text appeared to be about 3cm
+        if set(["ECO-SYSTEMS,INC.", "ECO-SYSTEMS, INC."]).issubset(set(text_results.keys())):
+            if "ECO-SYSTEMS, INC." in text_results.keys():
+                text_results["ECO-SYSTEMS,INC."] = text_results["ECO-SYSTEMS, INC."]
+                del text_results["ECO-SYSTEMS, INC."]
+            # Eco-systems,inc. seemed to be most reliable in terms of the box being tight on the text.
+            min_x = min([x for x in text_results['ECO-SYSTEMS,INC.'] if text_results['ECO-SYSTEMS,INC.'].index(x) % 2 == 0])
+            max_x = max([x for x in text_results['ECO-SYSTEMS,INC.'] if text_results['ECO-SYSTEMS,INC.'].index(x) % 2 == 0])
+            min_y = min([y for y in text_results['ECO-SYSTEMS,INC.'] if text_results['ECO-SYSTEMS,INC.'].index(y) % 2 == 1])
+            max_y = max([y for y in text_results['ECO-SYSTEMS,INC.'] if text_results['ECO-SYSTEMS,INC.'].index(y) % 2 == 1])
+            pixel_length = max([max_y - min_y, max_x - min_x])   
+            cm_pixel_ratio = np.true_divide(3, pixel_length)
+            print("ECO-SYSTEMS,INC. was a length of %s pixels" % pixel_length)
+            pixels_per_cm = np.true_divide(pixel_length, 3)
+         
+        elif set(['AGUNTIC', 'AQUATIC']).intersection(set(text_results.keys())) != set():
+            if 'AGUNTIC' in text_results.keys():
+                text_results['AQUATIC'] = text_results['AGUNTIC']
+                del text_results['AGUNTIC']
+            
+            min_x = min([x for x in text_results['AQUATIC'] if text_results['AQUATIC'].index(x) % 2 == 0])
+            max_x = max([x for x in text_results['AQUATIC'] if text_results['AQUATIC'].index(x) % 2 == 0])
+            min_y = min([y for y in text_results['AQUATIC'] if text_results['AQUATIC'].index(y) % 2 == 1])
+            max_y = max([y for y in text_results['AQUATIC'] if text_results['AQUATIC'].index(y) % 2 == 1])
+            pixel_length = max([max_y - min_y, max_x - min_x])
+            cm_pixel_ratio = np.true_divide(3, pixel_length)
+            print("Aquatic was a length of %s pixels" % pixel_length)
+            pixels_per_cm = np.true_divide(pixel_length, 3)
+
+        else:
+            try:
+                # If those aren't recognized, we fall back on text that always has to be in there (if they took the photo correctly
+                min_x = min([x for x in text_results[species_text] if text_results[species_text].index(x) % 2 == 0])
+                max_x = max([x for x in text_results[species_text] if text_results[species_text].index(x) % 2 == 0])
+                min_y = min([y for y in text_results[species_text] if text_results[species_text].index(y) % 2 == 1])
+                max_y = max([y for y in text_results[species_text] if text_results[species_text].index(y) % 2 == 1])
+                pixel_length = max([max_y - min_y, max_x - min_x])   
+
+                # First need to talk to Darrin about how I can physically measure these things.
+                # NOTE I measured it with the software on the computer that has the microscope attached to it
+             
+                if len(species_number) == 1:
+                    cm_pixel_ratio = np.true_divide(1.4, pixel_length)
+                elif len(species_number) == 2:
+                    cm_pixel_ratio = np.true_divide(1.65, pixel_length)
+                else:
+                    print("unable to get millimeter to pixel ratio") 
+                pixels_per_cm = np.true_divide(1, cm_pixel_ratio)
+            except Exception as e:
+                print("Unable to get centimeter to px ratio")
+                print(e)
+                f = open("/unraid/photos/OAImageRecognition/analysis/%s-error.txt" % image_id, 'w')
+                f.write("unable to measure oysters in image %s. Most likely this error occurred due to a lack of a sample id in the photo, or that the program was unabel to detect the sample id." % image_id)
+                f.close()
+                continue
+
+
+
+                
+
+        TIMESTAMP = str(time.time() * 1000)
+        print("reading in image")
+        im = cv.imread('/unraid/photos/OAImageRecognition/resized/%s.jpg' % imagename)
+        #im = image_resize(im, height = 800) # I have a strong feeling that this is significantly throwing off the calculations
+
+        print("grayscaling")
+        imgray = cv.cvtColor(im,cv.COLOR_BGR2GRAY)
+        #imgray = cv.GaussianBlur(imgray, (1,1), 0)
+        thresh_value = None
+        print("setting threshold value")
+        if oyster_species == 'Pacific':
+            thresh_value = 215
+        else:
+            thresh_value = 175
+        print("converting to black and white")
+        ret,thresh = cv.threshold(imgray, thresh_value, 255, cv.THRESH_BINARY_INV) # change 1st number fr shadows of shapes
+        print("exporting black and white image to jpg")
+        #cv.imwrite("/unraid/photos/OAImageRecognition/analysis/%s-threshed.jpg" % imagename, thresh)
+        print("finding contours")
+        contours, hierarchy = cv.findContours(thresh,cv.RETR_TREE,cv.CHAIN_APPROX_SIMPLE)
+        print("Detected %s contours" % len(contours))
+
+        print("looping through contours")
+        oyster_count = 1
+        oystercontours = []
+        for i in range(len(contours)):
+            print("Contour #%s" % i)
+
+            # contours are just lists of lists of coordinate points 
+            # (on a basic simple level. I think they are technically np arrays or something)
+            # Anyways, here we are extracting the list of coordinate points that define each contour to then analyze it
+            points = np.ndarray.tolist(contours[i])
+
+            #change range arg
+            p = [[] for i in range(len(contours[i]))]
+
+        # point is a list of lists of lists.
+            # we need only a list of lists
+            for j, coord in enumerate(points):
+                #print(j, coord)
+                p[j] = points[j][0]    
+            del points
+           
+            p = np.array(p)
+
+            contour = Contour(p, im)
+            cropped_path = "cropped_photos/contour-%s.jpg" % i
+            contour.crop_window(path=cropped_path,image=im,cushion=7) # path argument is cropped_path, cushion argument is 15 pixels
+            if cv.imread(cropped_path) is not None:
+                contour.getLength()
+                if contour.pixellength > 40:
+                    if contour.matchOysterShape(contour_standard, max_score = 0.35) and contour.containsOysters(path=cropped_path, detector=detector):
+                        contour.getWidth()
+                        if contour.width is not None:
+                            print("contour %s represents and oyster of length %smm and width %smm" % (i, contour.length, contour.width))
+                            # here we grab the contour
+                            cv.drawContours(im,contours[i],-1,(0,255,0),1)
+                            contour.drawLengthAndWidth(image=im)
+                            oystercontours.append(i)
+                            newrecord = DataFrame({'image_id':[image_id],
+                                                'jar':[jar],
+                                                'week':[week],
+                                                'species':[oyster_species],
+                                                'treatment':[treatment],
+                                                'replicate':[replicate],
+                                                'oyster_number':[oyster_count],
+                                                'individual_id':[np.nan], 
+                                                'pixels_per_cm':[pixels_per_cm],
+                                                'length_pixels':[contour.pixellength],
+                                                'width_pixels':[contour.pixelwidth],
+                                                'length_cm':[contour.length],
+                                                'width_cm':[contour.width]
+                                            })
+                            print(newrecord)
+                            output_df = concat([output_df, newrecord], ignore_index = True)
+                            print(output_df)
+                            cv.putText(im, "oyster #%s" % oyster_count, tuple([min([x[0] for x in contour.points]), min([y[1] for y in contour.points])]), cv.FONT_HERSHEY_PLAIN, 1, (0,0,255), 2)
+                            oyster_count += 1
+                        else:
+                            print("unable to get the width of contour %s" % i)
+                            continue
+                    else:
                         continue
                 else:
+                    print("skipping contour %s due to unusually short length" % i)
                     continue
             else:
-                print("skipping contour %s due to unusually short length" % i)
                 continue
-        else:
-            continue
-        del contour
+            del contour
 
-    cv.imwrite("/unraid/photos/OAImageRecognition/analysis/%s-analyzed.jpg" % image_id, im)
+        cv.imwrite("/unraid/photos/OAImageRecognition/analysis/%s-analyzed.jpg" % image_id, im)
 
-    #image_resized = image_resize(im, height = 800)
-    #cv.imwrite("/unraid/photos/OAImageRecognition/analysis/%s-analyzed-resized.jpg" % imagename, image_resized)
+        #image_resized = image_resize(im, height = 800)
+        #cv.imwrite("/unraid/photos/OAImageRecognition/analysis/%s-analyzed-resized.jpg" % imagename, image_resized)
 
-    output_df.to_csv("/unraid/photos/OAImageRecognition/analysis/%s.csv" % image_id, index = False)
-
+        output_df.to_csv("/unraid/photos/OAImageRecognition/analysis/%s.csv" % image_id, index = False)
+    except Exception as errormessage:
+        f = open("/unraid/photos/OAImageRecognition/%s-error.txt", 'w')
+        f.write("There was an error analyzing image %s:\n%s" % (image_id, errormessage))
+        f.close()
 
 
 

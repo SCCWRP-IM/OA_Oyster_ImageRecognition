@@ -188,9 +188,9 @@ else:
     # First need to talk to Darrin about how I can physically measure these things.
     # NOTE I measured it with the software on the computer that has the microscope attached to it
  
-    if len(species_number == 1):
+    if len(species_number) == 1:
         cm_pixel_ratio = np.true_divide(1.4, pixel_length)
-    elif len(species_number == 2):
+    elif len(species_number) == 2:
         cm_pixel_ratio = np.true_divide(1.65, pixel_length)
     else:
         print("unable to get millimeter to pixel ratio") 

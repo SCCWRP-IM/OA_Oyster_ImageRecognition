@@ -331,6 +331,10 @@ for imagename in imagenames:
             print("These are Olympia Oysters")
         elif "pH" in key:
             try:
+                if image_id == '2019_08_08_0100':
+                    week = 2
+                    pH_level = 7.7
+                    treatment = "7.7A0.5"
                 pH_treatment_text = re.split("\s+",key)
                 week = pH_treatment_text[0]
                 pH_level = str(float(pH_treatment_text[pH_treatment_text.index("pH") + 1].strip()))
@@ -385,23 +389,31 @@ for imagename in imagenames:
         pixels_per_cm = np.true_divide(pixel_length, 3)
 
     else:
-        # If those aren't recognized, we fall back on text that always has to be in there (if they took the photo correctly
-        min_x = min([x for x in text_results[species_text] if text_results[species_text].index(x) % 2 == 0])
-        max_x = max([x for x in text_results[species_text] if text_results[species_text].index(x) % 2 == 0])
-        min_y = min([y for y in text_results[species_text] if text_results[species_text].index(y) % 2 == 1])
-        max_y = max([y for y in text_results[species_text] if text_results[species_text].index(y) % 2 == 1])
-        pixel_length = max([max_y - min_y, max_x - min_x])   
+        try:
+            # If those aren't recognized, we fall back on text that always has to be in there (if they took the photo correctly
+            min_x = min([x for x in text_results[species_text] if text_results[species_text].index(x) % 2 == 0])
+            max_x = max([x for x in text_results[species_text] if text_results[species_text].index(x) % 2 == 0])
+            min_y = min([y for y in text_results[species_text] if text_results[species_text].index(y) % 2 == 1])
+            max_y = max([y for y in text_results[species_text] if text_results[species_text].index(y) % 2 == 1])
+            pixel_length = max([max_y - min_y, max_x - min_x])   
 
-        # First need to talk to Darrin about how I can physically measure these things.
-        # NOTE I measured it with the software on the computer that has the microscope attached to it
-     
-        if len(species_number == 1):
-            cm_pixel_ratio = np.true_divide(1.4, pixel_length)
-        elif len(species_number == 2):
-            cm_pixel_ratio = np.true_divide(1.65, pixel_length)
-        else:
-            print("unable to get millimeter to pixel ratio") 
-        pixels_per_cm = np.true_divide(1, cm_pixel_ratio)
+            # First need to talk to Darrin about how I can physically measure these things.
+            # NOTE I measured it with the software on the computer that has the microscope attached to it
+         
+            if len(species_number) == 1:
+                cm_pixel_ratio = np.true_divide(1.4, pixel_length)
+            elif len(species_number) == 2:
+                cm_pixel_ratio = np.true_divide(1.65, pixel_length)
+            else:
+                print("unable to get millimeter to pixel ratio") 
+            pixels_per_cm = np.true_divide(1, cm_pixel_ratio)
+        except Exception as e:
+            print("Unable to get centimeter to px ratio")
+            print(e)
+            f = open("/unraid/photos/OAImageRecognition/analysis/%s-error.txt" % image_id, 'w')
+            f.write("unable to measure oysters in image %s. Most likely this error occurred due to a lack of a sample id in the photo, or that the program was unabel to detect the sample id." % image_id)
+            f.close()
+            continue
 
 
 

@@ -6,11 +6,11 @@ from numpy import random, nanmax, nanmin, argmax, unravel_index
 from numpy.linalg import norm
 from scipy.spatial.distance import pdist, squareform
 from scipy.ndimage import distance_transform_edt
-import imageai
+#import imageai
 from imageai.Detection.Custom import CustomObjectDetection
 import time
 import os
-import sys
+#import sys
 import re
 import argparse
 
@@ -32,6 +32,7 @@ if args["image"]:
 else:
     imagename = "IMG_9823"
 
+print("imagename: %s" % imagename)
 
 # initialize the output dataframe
 output_df = DataFrame({'image_id':[],
@@ -39,6 +40,7 @@ output_df = DataFrame({'image_id':[],
                        'week':[],
                        'species':[],
                        'treatment':[],
+                       'replicate':[],
                        'oyster_number':[],
                        'individual_id':[], 
                        'pixels_per_cm':[],
@@ -54,13 +56,13 @@ if 'COMPUTER_VISION_SUBSCRIPTION_KEY' in os.environ:
     subscription_key = os.environ['COMPUTER_VISION_SUBSCRIPTION_KEY']
 else:
     print("\nSet the COMPUTER_VISION_SUBSCRIPTION_KEY environment variable.\n**Restart your shell or IDE for changes to take effect.**")
-    sys.exit()
+    #sys.exit()
 # Add your Computer Vision endpoint to your environment variables.
 if 'COMPUTER_VISION_ENDPOINT' in os.environ:
     endpoint = os.environ['COMPUTER_VISION_ENDPOINT']
 else:
     print("\nSet the COMPUTER_VISION_ENDPOINT environment variable.\n**Restart your shell or IDE for changes to take effect.**")
-    sys.exit()
+    #sys.exit()
 
 # authenticate the API credentials so microsoft knows we have access
 computervision_client = ComputerVisionClient(endpoint, CognitiveServicesCredentials(subscription_key))
@@ -133,9 +135,19 @@ for key in text_results.keys():
     else:
         continue
 
+replicate = np.nan
+jar = np.nan
+if "initial" in [str(x).lower().strip() for x in text_results.keys()]:
+    replicate = species_number
+else:
+    jar = species_number
+
 
 # On the ruler, the AQUATIC or ECO-SYSTEMS,INC. text appeared to be about 3cm
-if "ECO-SYSTEMS,INC." in text_results.keys():
+if set(["ECO-SYSTEMS,INC.", "ECO-SYSTEMS, INC."]).issubset(set(text_results.keys())):
+    if "ECO-SYSTEMS, INC." in text_results.keys():
+        text_results["ECO-SYSTEMS,INC."] = text_results["ECO-SYSTEMS, INC."]
+        del text_results["ECO-SYSTEMS, INC."]
     # Eco-systems,inc. seemed to be most reliable in terms of the box being tight on the text.
     min_x = min([x for x in text_results['ECO-SYSTEMS,INC.'] if text_results['ECO-SYSTEMS,INC.'].index(x) % 2 == 0])
     max_x = max([x for x in text_results['ECO-SYSTEMS,INC.'] if text_results['ECO-SYSTEMS,INC.'].index(x) % 2 == 0])
@@ -333,23 +345,29 @@ class Contour:
         
 
 TIMESTAMP = str(time.time() * 1000)
-im = cv.imread('photos/%s.jpg' % imagename)
+print("reading in image")
+im = cv.imread('/unraid/photos/OAImageRecognition/%s.jpg' % imagename)
 #im = image_resize(im, height = 800) # I have a strong feeling that this is significantly throwing off the calculations
 
-
+print("grayscaling")
 imgray = cv.cvtColor(im,cv.COLOR_BGR2GRAY)
 #imgray = cv.GaussianBlur(imgray, (1,1), 0)
 thresh_value = None
+print("setting threshold value")
 if oyster_species == 'Pacific':
     thresh_value = 215
 else:
     thresh_value = 175
+print("converting to black and white")
 ret,thresh = cv.threshold(imgray, thresh_value, 255, cv.THRESH_BINARY_INV) # change 1st number fr shadows of shapes
-cv.imwrite("output_images/%s-threshed.jpg" % imagename, thresh)
+print("exporting black and white image to jpg")
+cv.imwrite("/unraid/photos/OAImageRecognition/analysis/%s-threshed.jpg" % imagename, thresh)
+print("finding contours")
 contours, hierarchy = cv.findContours(thresh,cv.RETR_TREE,cv.CHAIN_APPROX_SIMPLE)
 print("Detected %s contours" % len(contours))
 
-# Here we get a generic oyster shape to match with the detected contours from the input image
+# Here we get a generic oiyster shape to match with the detected contours from the input image
+print("creating contour standard for an oyster's shape")
 oyster_outline = cv.imread("photos/OysterShape.jpg")
 oyster_outline = image_resize(oyster_outline, height = 800)
 oyster_outline = cv.cvtColor(oyster_outline, cv.COLOR_BGR2GRAY)
@@ -368,6 +386,7 @@ contour_standard = sorted_contour_standard[1]
 # save memory
 del sorted_contour_standard
 
+print("preparing the object detector")
 # prepare the object detector
 detector = CustomObjectDetection()
 detector.setModelTypeAsYOLOv3()
@@ -375,6 +394,7 @@ detector.setModelPath("/home/object_detection/models/detection_model-ex-001--los
 detector.setJsonPath("/home/object_detection/json/detection_config.json")
 detector.loadModel()
 
+print("looping through contours")
 oyster_count = 1
 oystercontours = []
 for i in range(len(contours)):
@@ -412,10 +432,11 @@ for i in range(len(contours)):
                     contour.drawLengthAndWidth(image=im)
                     oystercontours.append(i)
                     newrecord = DataFrame({'image_id':[imagename],
-                                        'jar':[np.nan],
+                                        'jar':[jar],
                                         'week':[week],
                                         'species':[oyster_species],
                                         'treatment':[treatment],
+                                        'replicate':[replicate],
                                         'oyster_number':[oyster_count],
                                         'individual_id':[np.nan], 
                                         'pixels_per_cm':[pixels_per_cm],

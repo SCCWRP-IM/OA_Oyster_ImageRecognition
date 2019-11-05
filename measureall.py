@@ -220,11 +220,13 @@ for imagename in imagenames:
 
         print("imagename: %s" % imagename)
         print("image_id: %s" % image_id)
-
+        
+        '''
         if image_id in analyzed_imagenames:
             print("skipping image %s because it has already been analyzed" % imagename)
             continue
-        
+        '''
+
         # initialize the output dataframe
         output_df = DataFrame({'image_id':[],
                                'jar':[],
@@ -284,7 +286,7 @@ for imagename in imagenames:
             except Exception as e:
                 print("could not run OCR API for image %s." % imagename)
                 print(e)
-                time.sleep(120)
+                time.sleep(240)
                 attempts += 1
         if attempts > 4:
             msg = "Unable to process the OCR API for image %s. Either Microsoft thinks we are calling the API too much, or the link is broken.\n" % imagename
@@ -314,9 +316,7 @@ for imagename in imagenames:
         treatment = None
 
         for key in text_results.keys():
-            text_results[key.lower()] = text_results[key]
-            del text_results[key]
-            key = key.lower()
+            print(key)
             if 'pacific' in key.lower():
                 oyster_species = 'Pacific'
                 species_text = key
@@ -333,25 +333,36 @@ for imagename in imagenames:
                 else:
                     species_number = re.split('\s+', species_text)[0].strip()
                 print("These are Olympia Oysters")
-            elif "ph" in key:
+            elif bool(re.search("\d{1,2}\s*\|*\s*[pP][hH]\s*\d\.*\d{0,1}", key)):
                 try:
                     if image_id == '2019_08_08_0100':
                         week = 2
                         pH_level = 7.7
                         treatment = "7.7A0.5"
-                    pH_treatment_text = re.split("\s+",key)
+                    pH_treatment_text = [str(x).strip().upper() for x in re.split("[\s+\|\\\]",key)]
+                    print(pH_treatment_text)
+                    time.sleep(2)
+                    if "PH" in pH_treatment_text:
+                        pH_treatment_text[pH_treatment_text.index("PH")] = "pH"
+                    elif "DH" in pH_treatment_text:
+                        pH_treatment_text[pH_treatment_text.index("DH")] = "pH"
+                    else:
+                        print("Unable to get treatment")
+                        raise ValueError("Unable to get the treatment")
                     week = pH_treatment_text[0]
-                    pH_level = str(float(pH_treatment_text[pH_treatment_text.index("ph") + 1].strip()))
+                    pH_level = str(float(pH_treatment_text[pH_treatment_text.index("pH") + 1].strip()))
                     if "fluctuating" in key.lower():
                         treatment = pH_level + pH_treatment_text[-1][-1] + pH_treatment_text[-1][:-1]
                     elif "constant" in key.lower():
                         treatment = pH_level + "C"
                     else:
                         treatment = None
+                    print("treatment: %s" % treatment)
                 except IndexError:
                     pH_level = None
                     treatment = None
-                    week = None    
+                    week = None
+                    continue
             else:
                 continue
 
@@ -520,7 +531,8 @@ for imagename in imagenames:
 
         output_df.to_csv("/unraid/photos/OAImageRecognition/analysis/%s.csv" % image_id, index = False)
     except Exception as errormessage:
-        f = open("/unraid/photos/OAImageRecognition/%s-error.txt", 'w')
+        print(errormessage)
+        f = open("/unraid/photos/OAImageRecognition/%s-errormessage.txt", 'w')
         f.write("There was an error analyzing image %s:\n%s" % (image_id, errormessage))
         f.close()
 

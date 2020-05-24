@@ -52,7 +52,8 @@ output_df = DataFrame({'image_id':[],
                        'length_pixels':[],
                        'width_pixels':[],
                        'length_cm':[],
-                       'width_cm':[]
+                       'width_cm':[],
+                       'surface_area_cm2':[]
                     })
 
 
@@ -276,6 +277,10 @@ class Contour:
             return False
         else:
             return True
+    
+    def getArea(self):
+        self.surfacearea = cv.contourArea(self.points) * (cm_pixel_ratio ** 2)
+
     def getLength(self):
         '''
         Using the method of getting the max distance across and a nearly orthogonal vector of max distance to that one
@@ -351,8 +356,11 @@ class Contour:
 
 TIMESTAMP = str(time.time() * 1000)
 print("reading in image")
-im = cv.imread('/unraid/photos/OAImageRecognition/resized/%s.jpg' % imagename)
-#im = image_resize(im, height = 800) # I have a strong feeling that this is significantly throwing off the calculations
+im = cv.imread('/unraid/photos/OAImageRecognition/resized/{}.JPG'.format(imagename))
+#im = image_resize(im, height = 800) #I have a strong feeling that this is significantly throwing off the calculations
+
+print("im")
+print(im)
 
 print("grayscaling")
 imgray = cv.cvtColor(im,cv.COLOR_BGR2GRAY)
@@ -430,6 +438,7 @@ for i in range(len(contours)):
         if contour.pixellength > 40:
             if contour.matchOysterShape(contour_standard, max_score = 0.35) and contour.containsOysters(path=cropped_path, detector=detector):
                 contour.getWidth()
+                contour.getArea()
                 if contour.width is not None:
                     print("contour %s represents and oyster of length %smm and width %smm" % (i, contour.length, contour.width))
                     # here we grab the contour
@@ -448,7 +457,8 @@ for i in range(len(contours)):
                                         'length_pixels':[contour.pixellength],
                                         'width_pixels':[contour.pixelwidth],
                                         'length_cm':[contour.length],
-                                        'width_cm':[contour.width]
+                                        'width_cm':[contour.width],
+                                        'surface_area_cm2':[contour.surfacearea]
                                     })
                     print(newrecord)
                     output_df = concat([output_df, newrecord], ignore_index = True)

@@ -68,7 +68,6 @@ class Contour:
                         output_image_path="output_images/detections/%s-contour%s-detected.jpg" % (imagename, i),
                         minimum_percentage_probability = 10
                     )
-            
             oysters = []
             for detection in detected_objects:
                 if detection['name'] == 'oyster':
@@ -156,7 +155,9 @@ class Contour:
         else:
             self.pixelwidth = None
             self.width_coords = None
-     
+    
+    def getArea(self):
+        self.surfacearea = cv.contourArea(self.points)  * (cm_pixel_ratio ** 2)
 
     def drawLengthAndWidth(self, image):
         "image represents the image we are drawing on"
@@ -210,8 +211,10 @@ detector.loadModel()
 images = glob.glob("/unraid/photos/OAImageRecognition/resized/*.JPG")
 imagenames = [str(x).split("/")[-1].split(".")[0] for x in images]
 
-analyzed_images = glob.glob("/unraid/photos/OAImageRecognition/analysis/*-analyzed.jpg")
+analyzed_images = glob.glob("/unraid/photos/OAImageRecognition/analysis_with_surfacearea/*-analyzed.jpg")
 analyzed_imagenames = [str(x).split("/")[-1].split(".")[0].split("-")[0] for x in analyzed_images]
+error_images = glob.glob("/unraid/photos/OAImageRecognition/analysis_with_surfacearea/*-error.txt")
+error_imagenames = [str(x).split("/")[-1].split(".")[0].split("-")[0] for x in error_images]
 
 
 for imagename in imagenames:
@@ -221,11 +224,14 @@ for imagename in imagenames:
         print("imagename: %s" % imagename)
         print("image_id: %s" % image_id)
         
-        '''
-        if image_id in analyzed_imagenames:
+        if image_id in analyzed_imagenames + error_imagenames:
             print("skipping image %s because it has already been analyzed" % imagename)
             continue
-        '''
+
+        # couldn't figure out why this image couldn't process.....
+        if image_id == "IMG_9826":
+            print("can't analyze image 9826")
+            continue
 
         # initialize the output dataframe
         output_df = DataFrame({'image_id':[],
@@ -240,7 +246,8 @@ for imagename in imagenames:
                                'length_pixels':[],
                                'width_pixels':[],
                                'length_cm':[],
-                               'width_cm':[]
+                               'width_cm':[],
+                                'surface_area_cm2':[]
                             })
 
 
@@ -264,7 +271,8 @@ for imagename in imagenames:
                 computervision_client = ComputerVisionClient(endpoint, CognitiveServicesCredentials(subscription_key))
 
                 # URL to the image we are analyzing
-                remote_image_url = "http://data.sccwrp.org/tmp/oysters/%s.JPG" % imagename
+                # directory where it lives in data.sccwrp.org server (192.168.1.24) is /var/www/tmp/oysters
+                remote_image_url = "https://data.sccwrp.org/tmp/oysters/%s.JPG" % imagename
 
                 # Call API with URL and raw response (allows you to get the operation location)
                 recognize_printed_results = computervision_client.batch_read_file(remote_image_url,  raw=True)
@@ -290,10 +298,11 @@ for imagename in imagenames:
                 attempts += 1
         if attempts > 4:
             msg = "Unable to process the OCR API for image %s. Either Microsoft thinks we are calling the API too much, or the link is broken.\n" % imagename
-            msg += "To check if the link is broken, visit http://data.sccwrp.org/tmp/oysters/%s.JPG and see if the image comes up." % imagename
-            f = file.open("/unraid/photos/OAImageRecognition/analysis/%s-error.txt" % imagename, 'w')
+            msg += "To check if the link is broken, visit https://data.sccwrp.org/tmp/oysters/%s.JPG and see if the image comes up." % imagename
+            f = file.open("/unraid/photos/OAImageRecognition/analysis_with_surfacearea/%s-error.txt" % imagename, 'w')
             f.write(msg)
             f.close() 
+            continue
         
 
         #Print the detected text, line by line
@@ -425,7 +434,7 @@ for imagename in imagenames:
             except Exception as e:
                 print("Unable to get centimeter to px ratio")
                 print(e)
-                f = open("/unraid/photos/OAImageRecognition/analysis/%s-error.txt" % image_id, 'w')
+                f = open("/unraid/photos/OAImageRecognition/analysis_with_surfacearea/%s-error.txt" % image_id, 'w')
                 f.write("unable to measure oysters in image %s. Most likely this error occurred due to a lack of a sample id in the photo, or that the program was unabel to detect the sample id." % image_id)
                 f.close()
                 continue
@@ -436,7 +445,7 @@ for imagename in imagenames:
 
         TIMESTAMP = str(time.time() * 1000)
         print("reading in image")
-        im = cv.imread('/unraid/photos/OAImageRecognition/resized/%s.jpg' % imagename)
+        im = cv.imread('/unraid/photos/OAImageRecognition/resized/{}.JPG'.format(imagename))
         #im = image_resize(im, height = 800) # I have a strong feeling that this is significantly throwing off the calculations
 
         print("grayscaling")
@@ -444,14 +453,17 @@ for imagename in imagenames:
         #imgray = cv.GaussianBlur(imgray, (1,1), 0)
         thresh_value = None
         print("setting threshold value")
+        '''
         if oyster_species == 'Pacific':
             thresh_value = 215
         else:
             thresh_value = 175
+        '''
+        thresh_value = 215 # let's try having it the same for Pacific and Olympia
         print("converting to black and white")
         ret,thresh = cv.threshold(imgray, thresh_value, 255, cv.THRESH_BINARY_INV) # change 1st number fr shadows of shapes
         print("exporting black and white image to jpg")
-        #cv.imwrite("/unraid/photos/OAImageRecognition/analysis/%s-threshed.jpg" % imagename, thresh)
+        #cv.imwrite("/unraid/photos/OAImageRecognition/analysis_with_surfacearea/%s-threshed.jpg" % imagename, thresh)
         print("finding contours")
         contours, hierarchy = cv.findContours(thresh,cv.RETR_TREE,cv.CHAIN_APPROX_SIMPLE)
         print("Detected %s contours" % len(contours))
@@ -487,6 +499,7 @@ for imagename in imagenames:
                 if contour.pixellength > 40:
                     if contour.matchOysterShape(contour_standard, max_score = 0.35) and contour.containsOysters(path=cropped_path, detector=detector):
                         contour.getWidth()
+                        contour.getArea()
                         if contour.width is not None:
                             print("contour %s represents and oyster of length %smm and width %smm" % (i, contour.length, contour.width))
                             # here we grab the contour
@@ -505,7 +518,8 @@ for imagename in imagenames:
                                                 'length_pixels':[contour.pixellength],
                                                 'width_pixels':[contour.pixelwidth],
                                                 'length_cm':[contour.length],
-                                                'width_cm':[contour.width]
+                                                'width_cm':[contour.width],
+                                                'surface_area_cm2':[contour.surfacearea]
                                             })
                             print(newrecord)
                             output_df = concat([output_df, newrecord], ignore_index = True)
@@ -524,12 +538,12 @@ for imagename in imagenames:
                 continue
             del contour
 
-        cv.imwrite("/unraid/photos/OAImageRecognition/analysis/%s-analyzed.jpg" % image_id, im)
+        cv.imwrite("/unraid/photos/OAImageRecognition/analysis_with_surfacearea/%s-analyzed.jpg" % image_id, im)
 
         #image_resized = image_resize(im, height = 800)
-        #cv.imwrite("/unraid/photos/OAImageRecognition/analysis/%s-analyzed-resized.jpg" % imagename, image_resized)
+        #cv.imwrite("/unraid/photos/OAImageRecognition/analysis_with_surfacearea/%s-analyzed-resized.jpg" % imagename, image_resized)
 
-        output_df.to_csv("/unraid/photos/OAImageRecognition/analysis/%s.csv" % image_id, index = False)
+        output_df.to_csv("/unraid/photos/OAImageRecognition/analysis_with_surfacearea/%s.csv" % image_id, index = False)
     except Exception as errormessage:
         print(errormessage)
         f = open("/unraid/photos/OAImageRecognition/%s-errormessage.txt", 'w')

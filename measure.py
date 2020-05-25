@@ -367,10 +367,7 @@ imgray = cv.cvtColor(im,cv.COLOR_BGR2GRAY)
 #imgray = cv.GaussianBlur(imgray, (1,1), 0)
 thresh_value = None
 print("setting threshold value")
-if oyster_species == 'Pacific':
-    thresh_value = 215
-else:
-    thresh_value = 175
+thresh_value = 235
 print("converting to black and white")
 ret,thresh = cv.threshold(imgray, thresh_value, 255, cv.THRESH_BINARY_INV) # change 1st number fr shadows of shapes
 print("exporting black and white image to jpg")
@@ -477,12 +474,12 @@ for i in range(len(contours)):
         continue
     del contour
 
-cv.imwrite("/unraid/photos/OAImageRecognition/analysis/%s-analyzed.jpg" % image_id, im)
+cv.imwrite("/unraid/photos/OAImageRecognition/analysis_with_surfacearea/%s-analyzed.jpg" % image_id, im)
 
 #image_resized = image_resize(im, height = 800)
-#cv.imwrite("/unraid/photos/OAImageRecognition/analysis/%s-analyzed-resized.jpg" % imagename, image_resized)
+#cv.imwrite("/unraid/photos/OAImageRecognition/analysis_with_surfacearea/%s-analyzed-resized.jpg" % imagename, image_resized)
 
-output_df.to_csv("/unraid/photos/OAImageRecognition/analysis/%s.csv" % image_id, index = False)
+output_df.to_csv("/unraid/photos/OAImageRecognition/analysis_with_surfacearea/%s.csv" % image_id, index = False)
 
 
 

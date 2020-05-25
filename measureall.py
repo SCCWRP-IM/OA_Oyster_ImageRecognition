@@ -224,13 +224,18 @@ for imagename in imagenames:
         print("imagename: %s" % imagename)
         print("image_id: %s" % image_id)
         
+        '''
         if image_id in analyzed_imagenames + error_imagenames:
             print("skipping image %s because it has already been analyzed" % imagename)
             continue
+        '''
 
         # couldn't figure out why this image couldn't process.....
         if image_id == "IMG_9826":
             print("can't analyze image 9826")
+            continue
+
+        if image_id != '2019_08_08_0062':
             continue
 
         # initialize the output dataframe
@@ -506,21 +511,24 @@ for imagename in imagenames:
                             cv.drawContours(im,contours[i],-1,(0,255,0),1)
                             contour.drawLengthAndWidth(image=im)
                             oystercontours.append(i)
-                            newrecord = DataFrame({'image_id':[image_id],
-                                                'jar':[jar],
-                                                'week':[week],
-                                                'species':[oyster_species],
-                                                'treatment':[treatment],
-                                                'replicate':[replicate],
-                                                'oyster_number':[oyster_count],
-                                                'individual_id':[np.nan], 
-                                                'pixels_per_cm':[pixels_per_cm],
-                                                'length_pixels':[contour.pixellength],
-                                                'width_pixels':[contour.pixelwidth],
-                                                'length_cm':[contour.length],
-                                                'width_cm':[contour.width],
-                                                'surface_area_cm2':[contour.surfacearea]
-                                            })
+                            newrecord = DataFrame(
+                                {
+                                    'image_id':[image_id],
+                                    'jar':[jar],
+                                    'week':[week],
+                                    'species':[oyster_species],
+                                    'treatment':[treatment],
+                                    'replicate':[replicate],
+                                    'oyster_number':[oyster_count],
+                                    'individual_id':[np.nan], 
+                                    'pixels_per_cm':[pixels_per_cm],
+                                    'length_pixels':[contour.pixellength],
+                                    'width_pixels':[contour.pixelwidth],
+                                    'length_cm':[contour.length],
+                                    'width_cm':[contour.width],
+                                    'surface_area_cm2':[contour.surfacearea]
+                                }
+                            )
                             print(newrecord)
                             output_df = concat([output_df, newrecord], ignore_index = True)
                             print(output_df)

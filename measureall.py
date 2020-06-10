@@ -157,7 +157,8 @@ class Contour:
             self.width_coords = None
     
     def getArea(self):
-        self.surfacearea = cv.contourArea(self.points)  * (cm_pixel_ratio ** 2)
+        self.surfacearea_px2 = cv.contourArea(self.points)
+        self.surfacearea = cv.contourArea(self.points) * (cm_pixel_ratio ** 2)
 
     def drawLengthAndWidth(self, image):
         "image represents the image we are drawing on"
@@ -224,36 +225,43 @@ for imagename in imagenames:
         print("imagename: %s" % imagename)
         print("image_id: %s" % image_id)
         
-        '''
+        
         if image_id in analyzed_imagenames + error_imagenames:
             print("skipping image %s because it has already been analyzed" % imagename)
             continue
-        '''
+        
 
         # couldn't figure out why this image couldn't process.....
         if image_id == "IMG_9826":
             print("can't analyze image 9826")
             continue
 
+        '''        
         if image_id != '2019_08_08_0062':
             continue
+        '''
 
         # initialize the output dataframe
-        output_df = DataFrame({'image_id':[],
-                               'jar':[],
-                               'week':[],
-                               'species':[],
-                               'treatment':[],
-                               'replicate':[],
-                               'oyster_number':[],
-                               'individual_id':[], 
-                               'pixels_per_cm':[],
-                               'length_pixels':[],
-                               'width_pixels':[],
-                               'length_cm':[],
-                               'width_cm':[],
-                                'surface_area_cm2':[]
-                            })
+        output_df = DataFrame(
+            {
+                'image_id':[],
+                'jar':[],
+                'week':[],
+                'species':[],
+                'treatment':[],
+                'replicate':[],
+                'oyster_number':[],
+                'individual_id':[], 
+                'pixels_per_cm':[],
+                'pixels2_per_cm2':[],
+                'length_pixels':[],
+                'width_pixels':[],
+                'length_cm':[],
+                'width_cm':[],
+                'surface_area_cm2':[],
+                'surface_area_px2':[]
+            }
+        )
 
 
         # Add your Computer Vision subscription key to your environment variables.
@@ -522,11 +530,13 @@ for imagename in imagenames:
                                     'oyster_number':[oyster_count],
                                     'individual_id':[np.nan], 
                                     'pixels_per_cm':[pixels_per_cm],
+                                    'pixels2_per_cm2':[pixels_per_cm ** 2],
                                     'length_pixels':[contour.pixellength],
                                     'width_pixels':[contour.pixelwidth],
                                     'length_cm':[contour.length],
                                     'width_cm':[contour.width],
-                                    'surface_area_cm2':[contour.surfacearea]
+                                    'surface_area_cm2':[contour.surfacearea],
+                                    'surface_area_px2':[contour.surfacearea_px2]
                                 }
                             )
                             print(newrecord)

@@ -151,7 +151,7 @@ class Contour:
             width = nanmax(vectors_df[vectors_df.dot_product < 0.075].norms)
             self.width_coords = vectors_df[vectors_df.norms == width].sort_values('dot_product').coordinates.tolist()[0]
             self.pixelwidth = round(width, 2)
-            self.width = round(self.pixelwidth * cm_pixel_ratio, 2) # pixels times mm / pixels yields units of millimeters
+            self.width = round(self.pixelwidth * cm_pixel_ratio, 2) # pixels times cm / pixels yields units of millimeters
         else:
             self.pixelwidth = None
             self.width_coords = None
@@ -209,12 +209,13 @@ detector.setJsonPath("/home/object_detection/json/detection_config.json")
 detector.loadModel()
 
 
-images = glob.glob("/unraid/photos/OAImageRecognition/resized/*.JPG")
+#images = glob.glob("/unraid/photos/OAImageRecognition/resized/*.JPG")
+images = glob.glob("/unraid/photos/OAImageRecognition/ShoppedOysterPics/edits/*.png")
 imagenames = [str(x).split("/")[-1].split(".")[0] for x in images]
 
-analyzed_images = glob.glob("/unraid/photos/OAImageRecognition/analysis_with_surfacearea/*-analyzed.jpg")
+analyzed_images = glob.glob("/unraid/photos/OAImageRecognition/analysis_with_shoppedphotos/*-analyzed.jpg")
 analyzed_imagenames = [str(x).split("/")[-1].split(".")[0].split("-")[0] for x in analyzed_images]
-error_images = glob.glob("/unraid/photos/OAImageRecognition/analysis_with_surfacearea/*-error.txt")
+error_images = glob.glob("/unraid/photos/OAImageRecognition/analysis_with_shoppedphotos/*-error.txt")
 error_imagenames = [str(x).split("/")[-1].split(".")[0].split("-")[0] for x in error_images]
 
 
@@ -226,9 +227,9 @@ for imagename in imagenames:
         print("image_id: %s" % image_id)
         
         
-        if image_id in analyzed_imagenames + error_imagenames:
-            print("skipping image %s because it has already been analyzed" % imagename)
-            continue
+        #if image_id in analyzed_imagenames + error_imagenames:
+        #    print("skipping image %s because it has already been analyzed" % imagename)
+        #    continue
         
 
         # couldn't figure out why this image couldn't process.....
@@ -285,8 +286,8 @@ for imagename in imagenames:
 
                 # URL to the image we are analyzing
                 # directory where it lives in data.sccwrp.org server (192.168.1.24) is /var/www/tmp/oysters
-                remote_image_url = "https://data.sccwrp.org/tmp/oysters/%s.JPG" % imagename
-
+                #remote_image_url = "https://data.sccwrp.org/tmp/oysters/%s.JPG" % imagename
+                remote_image_url = "https://data.sccwrp.org/tmp/oysters/%s.png" % imagename
                 # Call API with URL and raw response (allows you to get the operation location)
                 recognize_printed_results = computervision_client.batch_read_file(remote_image_url,  raw=True)
 
@@ -312,7 +313,7 @@ for imagename in imagenames:
         if attempts > 4:
             msg = "Unable to process the OCR API for image %s. Either Microsoft thinks we are calling the API too much, or the link is broken.\n" % imagename
             msg += "To check if the link is broken, visit https://data.sccwrp.org/tmp/oysters/%s.JPG and see if the image comes up." % imagename
-            f = file.open("/unraid/photos/OAImageRecognition/analysis_with_surfacearea/%s-error.txt" % imagename, 'w')
+            f = file.open("/unraid/photos/OAImageRecognition/analysis_with_shoppedphotos/%s-error.txt" % imagename, 'w')
             f.write(msg)
             f.close() 
             continue
@@ -336,6 +337,8 @@ for imagename in imagenames:
         week = None
         pH_level = None
         treatment = None
+        pixels_per_cm = None
+        cm_pixel_ratio = None
 
         for key in text_results.keys():
             print(key)
@@ -385,6 +388,10 @@ for imagename in imagenames:
                     treatment = None
                     week = None
                     continue
+            elif 'px' in key.lower():
+                print("trying to get pixels per cm ratio")
+                pixels_per_cm = int(re.sub("px","",key.lower()))
+                cm_pixel_ratio = np.true_divide(1,pixels_per_cm)
             else:
                 continue
 
@@ -395,62 +402,67 @@ for imagename in imagenames:
         else:
             jar = species_number
 
-
-        # On the ruler, the AQUATIC or ECO-SYSTEMS,INC. text appeared to be about 3cm
-        if set(["ECO-SYSTEMS,INC.", "ECO-SYSTEMS, INC."]).issubset(set(text_results.keys())):
-            if "ECO-SYSTEMS, INC." in text_results.keys():
-                text_results["ECO-SYSTEMS,INC."] = text_results["ECO-SYSTEMS, INC."]
-                del text_results["ECO-SYSTEMS, INC."]
-            # Eco-systems,inc. seemed to be most reliable in terms of the box being tight on the text.
-            min_x = min([x for x in text_results['ECO-SYSTEMS,INC.'] if text_results['ECO-SYSTEMS,INC.'].index(x) % 2 == 0])
-            max_x = max([x for x in text_results['ECO-SYSTEMS,INC.'] if text_results['ECO-SYSTEMS,INC.'].index(x) % 2 == 0])
-            min_y = min([y for y in text_results['ECO-SYSTEMS,INC.'] if text_results['ECO-SYSTEMS,INC.'].index(y) % 2 == 1])
-            max_y = max([y for y in text_results['ECO-SYSTEMS,INC.'] if text_results['ECO-SYSTEMS,INC.'].index(y) % 2 == 1])
-            pixel_length = max([max_y - min_y, max_x - min_x])   
-            cm_pixel_ratio = np.true_divide(3, pixel_length)
-            print("ECO-SYSTEMS,INC. was a length of %s pixels" % pixel_length)
-            pixels_per_cm = np.true_divide(pixel_length, 3)
-         
-        elif set(['AGUNTIC', 'AQUATIC']).intersection(set(text_results.keys())) != set():
-            if 'AGUNTIC' in text_results.keys():
-                text_results['AQUATIC'] = text_results['AGUNTIC']
-                del text_results['AGUNTIC']
-            
-            min_x = min([x for x in text_results['AQUATIC'] if text_results['AQUATIC'].index(x) % 2 == 0])
-            max_x = max([x for x in text_results['AQUATIC'] if text_results['AQUATIC'].index(x) % 2 == 0])
-            min_y = min([y for y in text_results['AQUATIC'] if text_results['AQUATIC'].index(y) % 2 == 1])
-            max_y = max([y for y in text_results['AQUATIC'] if text_results['AQUATIC'].index(y) % 2 == 1])
-            pixel_length = max([max_y - min_y, max_x - min_x])
-            cm_pixel_ratio = np.true_divide(3, pixel_length)
-            print("Aquatic was a length of %s pixels" % pixel_length)
-            pixels_per_cm = np.true_divide(pixel_length, 3)
-
-        else:
-            try:
-                # If those aren't recognized, we fall back on text that always has to be in there (if they took the photo correctly
-                min_x = min([x for x in text_results[species_text] if text_results[species_text].index(x) % 2 == 0])
-                max_x = max([x for x in text_results[species_text] if text_results[species_text].index(x) % 2 == 0])
-                min_y = min([y for y in text_results[species_text] if text_results[species_text].index(y) % 2 == 1])
-                max_y = max([y for y in text_results[species_text] if text_results[species_text].index(y) % 2 == 1])
+        
+        # If the pixel ratio was not written on the picture, we have to resort to this undesirable method which 100% needs to be manually QAed
+        if cm_pixel_ratio is None:
+            # On the ruler, the AQUATIC or ECO-SYSTEMS,INC. text appeared to be about 3cm
+            if set(["ECO-SYSTEMS,INC.", "ECO-SYSTEMS, INC."]).issubset(set(text_results.keys())):
+                if "ECO-SYSTEMS, INC." in text_results.keys():
+                    text_results["ECO-SYSTEMS,INC."] = text_results["ECO-SYSTEMS, INC."]
+                    del text_results["ECO-SYSTEMS, INC."]
+                # Eco-systems,inc. seemed to be most reliable in terms of the box being tight on the text.
+                min_x = min([x for x in text_results['ECO-SYSTEMS,INC.'] if text_results['ECO-SYSTEMS,INC.'].index(x) % 2 == 0])
+                max_x = max([x for x in text_results['ECO-SYSTEMS,INC.'] if text_results['ECO-SYSTEMS,INC.'].index(x) % 2 == 0])
+                min_y = min([y for y in text_results['ECO-SYSTEMS,INC.'] if text_results['ECO-SYSTEMS,INC.'].index(y) % 2 == 1])
+                max_y = max([y for y in text_results['ECO-SYSTEMS,INC.'] if text_results['ECO-SYSTEMS,INC.'].index(y) % 2 == 1])
                 pixel_length = max([max_y - min_y, max_x - min_x])   
+                cm_pixel_ratio = np.true_divide(3, pixel_length)
+                print("ECO-SYSTEMS,INC. was a length of %s pixels" % pixel_length)
+                pixels_per_cm = np.true_divide(pixel_length, 3)
+            
+            elif set(['AGUNTIC', 'AQUATIC']).intersection(set(text_results.keys())) != set():
+                if 'AGUNTIC' in text_results.keys():
+                    text_results['AQUATIC'] = text_results['AGUNTIC']
+                    del text_results['AGUNTIC']
+                
+                min_x = min([x for x in text_results['AQUATIC'] if text_results['AQUATIC'].index(x) % 2 == 0])
+                max_x = max([x for x in text_results['AQUATIC'] if text_results['AQUATIC'].index(x) % 2 == 0])
+                min_y = min([y for y in text_results['AQUATIC'] if text_results['AQUATIC'].index(y) % 2 == 1])
+                max_y = max([y for y in text_results['AQUATIC'] if text_results['AQUATIC'].index(y) % 2 == 1])
+                pixel_length = max([max_y - min_y, max_x - min_x])
+                cm_pixel_ratio = np.true_divide(3, pixel_length)
+                print("Aquatic was a length of %s pixels" % pixel_length)
+                pixels_per_cm = np.true_divide(pixel_length, 3)
 
-                # First need to talk to Darrin about how I can physically measure these things.
-                # NOTE I measured it with the software on the computer that has the microscope attached to it
-             
-                if len(species_number) == 1:
-                    cm_pixel_ratio = np.true_divide(1.4, pixel_length)
-                elif len(species_number) == 2:
-                    cm_pixel_ratio = np.true_divide(1.65, pixel_length)
-                else:
-                    print("unable to get millimeter to pixel ratio") 
-                pixels_per_cm = np.true_divide(1, cm_pixel_ratio)
-            except Exception as e:
-                print("Unable to get centimeter to px ratio")
-                print(e)
-                f = open("/unraid/photos/OAImageRecognition/analysis_with_surfacearea/%s-error.txt" % image_id, 'w')
-                f.write("unable to measure oysters in image %s. Most likely this error occurred due to a lack of a sample id in the photo, or that the program was unabel to detect the sample id." % image_id)
-                f.close()
-                continue
+            else:
+                try:
+                    # If those aren't recognized, we fall back on text that always has to be in there (if they took the photo correctly
+                    min_x = min([x for x in text_results[species_text] if text_results[species_text].index(x) % 2 == 0])
+                    max_x = max([x for x in text_results[species_text] if text_results[species_text].index(x) % 2 == 0])
+                    min_y = min([y for y in text_results[species_text] if text_results[species_text].index(y) % 2 == 1])
+                    max_y = max([y for y in text_results[species_text] if text_results[species_text].index(y) % 2 == 1])
+                    pixel_length = max([max_y - min_y, max_x - min_x])   
+
+                    # First need to talk to Darrin about how I can physically measure these things.
+                    # NOTE I measured it with the software on the computer that has the microscope attached to it
+                
+                    if len(species_number) == 1:
+                        cm_pixel_ratio = np.true_divide(1.4, pixel_length)
+                        pixels_per_cm = np.true_divide(1, cm_pixel_ratio)
+                    elif len(species_number) == 2:
+                        cm_pixel_ratio = np.true_divide(1.65, pixel_length)
+                        pixels_per_cm = np.true_divide(1, cm_pixel_ratio)
+                    else:
+                        print("unable to get millimeter to pixel ratio")
+                    
+                    
+                except Exception as e:
+                    print("Unable to get centimeter to px ratio")
+                    print(e)
+                    f = open("/unraid/photos/OAImageRecognition/analysis_with_shoppedphotos/%s-error.txt" % image_id, 'w')
+                    f.write("unable to measure oysters in image %s. Most likely this error occurred due to a lack of a sample id in the photo, or that the program was unabel to detect the sample id." % image_id)
+                    f.close()
+                    continue
 
 
 
@@ -458,7 +470,8 @@ for imagename in imagenames:
 
         TIMESTAMP = str(time.time() * 1000)
         print("reading in image")
-        im = cv.imread('/unraid/photos/OAImageRecognition/resized/{}.JPG'.format(imagename))
+        #im = cv.imread('/unraid/photos/OAImageRecognition/resized/{}.JPG'.format(imagename))
+        im = cv.imread('/unraid/photos/OAImageRecognition/ShoppedOysterPics/edits/{}.png'.format(imagename))
         #im = image_resize(im, height = 800) # I have a strong feeling that this is significantly throwing off the calculations
 
         print("grayscaling")
@@ -476,7 +489,7 @@ for imagename in imagenames:
         print("converting to black and white")
         ret,thresh = cv.threshold(imgray, thresh_value, 255, cv.THRESH_BINARY_INV) # change 1st number fr shadows of shapes
         print("exporting black and white image to jpg")
-        #cv.imwrite("/unraid/photos/OAImageRecognition/analysis_with_surfacearea/%s-threshed.jpg" % imagename, thresh)
+        #cv.imwrite("/unraid/photos/OAImageRecognition/analysis_with_shoppedphotos/%s-threshed.jpg" % imagename, thresh)
         print("finding contours")
         contours, hierarchy = cv.findContours(thresh,cv.RETR_TREE,cv.CHAIN_APPROX_SIMPLE)
         print("Detected %s contours" % len(contours))
@@ -556,12 +569,12 @@ for imagename in imagenames:
                 continue
             del contour
 
-        cv.imwrite("/unraid/photos/OAImageRecognition/analysis_with_surfacearea/%s-analyzed.jpg" % image_id, im)
+        cv.imwrite("/unraid/photos/OAImageRecognition/analysis_with_shoppedphotos/%s-analyzed.jpg" % image_id, im)
 
         #image_resized = image_resize(im, height = 800)
-        #cv.imwrite("/unraid/photos/OAImageRecognition/analysis_with_surfacearea/%s-analyzed-resized.jpg" % imagename, image_resized)
+        #cv.imwrite("/unraid/photos/OAImageRecognition/analysis_with_shoppedphotos/%s-analyzed-resized.jpg" % imagename, image_resized)
 
-        output_df.to_csv("/unraid/photos/OAImageRecognition/analysis_with_surfacearea/%s.csv" % image_id, index = False)
+        output_df.to_csv("/unraid/photos/OAImageRecognition/analysis_with_shoppedphotos/%s.csv" % image_id, index = False)
     except Exception as errormessage:
         print(errormessage)
         f = open("/unraid/photos/OAImageRecognition/%s-errormessage.txt", 'w')

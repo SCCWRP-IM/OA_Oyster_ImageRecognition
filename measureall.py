@@ -210,32 +210,85 @@ detector.loadModel()
 
 
 #images = glob.glob("/unraid/photos/OAImageRecognition/resized/*.JPG")
-images = glob.glob("/unraid/photos/OAImageRecognition/ShoppedOysterPics/edits/*.png")
+images = glob.glob("/unraid/photos/OAImageRecognition/resized/photoshopped/*.png")
 imagenames = [str(x).split("/")[-1].split(".")[0] for x in images]
 
+# analyzed images are exported as jpg's
 analyzed_images = glob.glob("/unraid/photos/OAImageRecognition/analysis_with_shoppedphotos/*-analyzed.jpg")
 analyzed_imagenames = [str(x).split("/")[-1].split(".")[0].split("-")[0] for x in analyzed_images]
 error_images = glob.glob("/unraid/photos/OAImageRecognition/analysis_with_shoppedphotos/*-error.txt")
 error_imagenames = [str(x).split("/")[-1].split(".")[0].split("-")[0] for x in error_images]
 
+pixels_images = [
+    "2000_01_01_0209-resized",
+    "2000_01_01_0221-resized",
+    "2000_01_01_0232-resized",
+    "2000_01_01_0233-resized",
+    "2000_12_31_0151-resized",
+    "2000_12_31_0200-resized",
+    "2000_12_31_0202-resized",
+    "2000_12_31_0239-resized",
+    "2000_12_31_0244-resized",
+    "2000_12_31_0247-resized",
+    "2019_08_08_0049-resized",
+    "2019_08_08_0051-resized",
+    "2019_08_08_0052-resized",
+    "2019_08_08_0054-resized",
+    "2019_08_08_0057-resized",
+    "2019_08_08_0058-resized",
+    "2019_08_08_0060-resized",
+    "2019_08_08_0062-resized",
+    "2019_08_08_0063-resized",
+    "2019_08_08_0064-resized",
+    "2019_08_08_0067-resized",
+    "2019_08_08_0068-resized",
+    "2019_08_08_0069-resized",
+    "2019_08_08_0072-resized",
+    "2019_08_08_0073-resized",
+    "2019_08_08_0074-resized",
+    "2019_08_08_0075-resized",
+    "2019_08_08_0076-resized",
+    "2019_08_08_0077-resized",
+    "2019_08_08_0078-resized",
+    "2019_08_08_0079-resized",
+    "2019_08_08_0080-resized",
+    "2019_08_08_0081-resized",
+    "2019_08_08_0085-resized",
+    "2019_08_08_0091-resized",
+    "2019_08_08_0093-resized",
+    "2019_08_08_0094-resized",
+    "2019_08_08_0100-resized",
+    "2019_08_08_0101-resized",
+    "2019_08_08_0112-resized",
+    "2019_08_08_0116-resized",
+    "2019_08_09_0147-resized",
+    "IMG_0004_2-resized",
+    "IMG_0004-resized",
+    "IMG_0005-resized",
+    "IMG_9961-resized"
+]
 
+#for imagename in list(set(imagenames).intersection(set(pixels_images))):
 for imagename in imagenames:
     try:
         image_id = re.sub("-resized", "", imagename)
+        image_id = re.sub("-photoshopped", "", imagename)
 
         print("imagename: %s" % imagename)
         print("image_id: %s" % image_id)
         
         
-        #if image_id in analyzed_imagenames + error_imagenames:
-        #    print("skipping image %s because it has already been analyzed" % imagename)
-        #    continue
+        if image_id in analyzed_imagenames: # + error_imagenames:
+            # pixels images refers to the fact that the pixel to cm ratio was written with the word "pixels" rather than px
+            if image_id not in [re.sub("-resized", "", x) for x in pixels_images]:
+                print("skipping image %s because it has already been analyzed" % imagename)
+                continue
         
 
         # couldn't figure out why this image couldn't process.....
-        if image_id == "IMG_9826":
-            print("can't analyze image 9826")
-            continue
+        #if image_id == "IMG_9826":
+        #    print("can't analyze image 9826")
+        #    continue
 
         '''        
         if image_id != '2019_08_08_0062':
@@ -312,7 +365,7 @@ for imagename in imagenames:
                 attempts += 1
         if attempts > 4:
             msg = "Unable to process the OCR API for image %s. Either Microsoft thinks we are calling the API too much, or the link is broken.\n" % imagename
-            msg += "To check if the link is broken, visit https://data.sccwrp.org/tmp/oysters/%s.JPG and see if the image comes up." % imagename
+            msg += "To check if the link is broken, visit https://data.sccwrp.org/tmp/oysters/%s.png and see if the image comes up." % imagename
             f = file.open("/unraid/photos/OAImageRecognition/analysis_with_shoppedphotos/%s-error.txt" % imagename, 'w')
             f.write(msg)
             f.close() 
@@ -390,7 +443,11 @@ for imagename in imagenames:
                     continue
             elif 'px' in key.lower():
                 print("trying to get pixels per cm ratio")
-                pixels_per_cm = int(re.sub("px","",key.lower()))
+                pixels_per_cm = float(re.sub("px","",key.lower()))
+                cm_pixel_ratio = np.true_divide(1,pixels_per_cm)
+            elif 'pixels' in key.lower():
+                print("trying to get pixels per cm ratio")
+                pixels_per_cm = float(re.sub("pixels","",key.lower()))
                 cm_pixel_ratio = np.true_divide(1,pixels_per_cm)
             else:
                 continue
@@ -402,76 +459,17 @@ for imagename in imagenames:
         else:
             jar = species_number
 
-        
+
         # If the pixel ratio was not written on the picture, we have to resort to this undesirable method which 100% needs to be manually QAed
         if cm_pixel_ratio is None:
-            # On the ruler, the AQUATIC or ECO-SYSTEMS,INC. text appeared to be about 3cm
-            if set(["ECO-SYSTEMS,INC.", "ECO-SYSTEMS, INC."]).issubset(set(text_results.keys())):
-                if "ECO-SYSTEMS, INC." in text_results.keys():
-                    text_results["ECO-SYSTEMS,INC."] = text_results["ECO-SYSTEMS, INC."]
-                    del text_results["ECO-SYSTEMS, INC."]
-                # Eco-systems,inc. seemed to be most reliable in terms of the box being tight on the text.
-                min_x = min([x for x in text_results['ECO-SYSTEMS,INC.'] if text_results['ECO-SYSTEMS,INC.'].index(x) % 2 == 0])
-                max_x = max([x for x in text_results['ECO-SYSTEMS,INC.'] if text_results['ECO-SYSTEMS,INC.'].index(x) % 2 == 0])
-                min_y = min([y for y in text_results['ECO-SYSTEMS,INC.'] if text_results['ECO-SYSTEMS,INC.'].index(y) % 2 == 1])
-                max_y = max([y for y in text_results['ECO-SYSTEMS,INC.'] if text_results['ECO-SYSTEMS,INC.'].index(y) % 2 == 1])
-                pixel_length = max([max_y - min_y, max_x - min_x])   
-                cm_pixel_ratio = np.true_divide(3, pixel_length)
-                print("ECO-SYSTEMS,INC. was a length of %s pixels" % pixel_length)
-                pixels_per_cm = np.true_divide(pixel_length, 3)
-            
-            elif set(['AGUNTIC', 'AQUATIC']).intersection(set(text_results.keys())) != set():
-                if 'AGUNTIC' in text_results.keys():
-                    text_results['AQUATIC'] = text_results['AGUNTIC']
-                    del text_results['AGUNTIC']
-                
-                min_x = min([x for x in text_results['AQUATIC'] if text_results['AQUATIC'].index(x) % 2 == 0])
-                max_x = max([x for x in text_results['AQUATIC'] if text_results['AQUATIC'].index(x) % 2 == 0])
-                min_y = min([y for y in text_results['AQUATIC'] if text_results['AQUATIC'].index(y) % 2 == 1])
-                max_y = max([y for y in text_results['AQUATIC'] if text_results['AQUATIC'].index(y) % 2 == 1])
-                pixel_length = max([max_y - min_y, max_x - min_x])
-                cm_pixel_ratio = np.true_divide(3, pixel_length)
-                print("Aquatic was a length of %s pixels" % pixel_length)
-                pixels_per_cm = np.true_divide(pixel_length, 3)
-
-            else:
-                try:
-                    # If those aren't recognized, we fall back on text that always has to be in there (if they took the photo correctly
-                    min_x = min([x for x in text_results[species_text] if text_results[species_text].index(x) % 2 == 0])
-                    max_x = max([x for x in text_results[species_text] if text_results[species_text].index(x) % 2 == 0])
-                    min_y = min([y for y in text_results[species_text] if text_results[species_text].index(y) % 2 == 1])
-                    max_y = max([y for y in text_results[species_text] if text_results[species_text].index(y) % 2 == 1])
-                    pixel_length = max([max_y - min_y, max_x - min_x])   
-
-                    # First need to talk to Darrin about how I can physically measure these things.
-                    # NOTE I measured it with the software on the computer that has the microscope attached to it
-                
-                    if len(species_number) == 1:
-                        cm_pixel_ratio = np.true_divide(1.4, pixel_length)
-                        pixels_per_cm = np.true_divide(1, cm_pixel_ratio)
-                    elif len(species_number) == 2:
-                        cm_pixel_ratio = np.true_divide(1.65, pixel_length)
-                        pixels_per_cm = np.true_divide(1, cm_pixel_ratio)
-                    else:
-                        print("unable to get millimeter to pixel ratio")
-                    
-                    
-                except Exception as e:
-                    print("Unable to get centimeter to px ratio")
-                    print(e)
-                    f = open("/unraid/photos/OAImageRecognition/analysis_with_shoppedphotos/%s-error.txt" % image_id, 'w')
-                    f.write("unable to measure oysters in image %s. Most likely this error occurred due to a lack of a sample id in the photo, or that the program was unabel to detect the sample id." % image_id)
-                    f.close()
-                    continue
-
-
+            print("unable to get conversion factor.")
 
                 
 
         TIMESTAMP = str(time.time() * 1000)
         print("reading in image")
         #im = cv.imread('/unraid/photos/OAImageRecognition/resized/{}.JPG'.format(imagename))
-        im = cv.imread('/unraid/photos/OAImageRecognition/ShoppedOysterPics/edits/{}.png'.format(imagename))
+        im = cv.imread('/unraid/photos/OAImageRecognition/resized/photoshopped/{}.png'.format(imagename))
         #im = image_resize(im, height = 800) # I have a strong feeling that this is significantly throwing off the calculations
 
         print("grayscaling")
@@ -485,7 +483,10 @@ for imagename in imagenames:
         else:
             thresh_value = 175
         '''
-        thresh_value = 215 # let's try having it the same for Pacific and Olympia
+
+        # I am setting the threshold very high because we are doctoring the images first
+        thresh_value = 250 # let's try having it the same for Pacific and Olympia
+        
         print("converting to black and white")
         ret,thresh = cv.threshold(imgray, thresh_value, 255, cv.THRESH_BINARY_INV) # change 1st number fr shadows of shapes
         print("exporting black and white image to jpg")
@@ -527,7 +528,7 @@ for imagename in imagenames:
                         contour.getWidth()
                         contour.getArea()
                         if contour.width is not None:
-                            print("contour %s represents and oyster of length %smm and width %smm" % (i, contour.length, contour.width))
+                            print("contour %s represents and oyster of length %scm and width %scm" % (i, contour.length, contour.width))
                             # here we grab the contour
                             cv.drawContours(im,contours[i],-1,(0,255,0),1)
                             contour.drawLengthAndWidth(image=im)
@@ -570,11 +571,8 @@ for imagename in imagenames:
             del contour
 
         cv.imwrite("/unraid/photos/OAImageRecognition/analysis_with_shoppedphotos/%s-analyzed.jpg" % image_id, im)
-
-        #image_resized = image_resize(im, height = 800)
-        #cv.imwrite("/unraid/photos/OAImageRecognition/analysis_with_shoppedphotos/%s-analyzed-resized.jpg" % imagename, image_resized)
-
         output_df.to_csv("/unraid/photos/OAImageRecognition/analysis_with_shoppedphotos/%s.csv" % image_id, index = False)
+
     except Exception as errormessage:
         print(errormessage)
         f = open("/unraid/photos/OAImageRecognition/%s-errormessage.txt", 'w')

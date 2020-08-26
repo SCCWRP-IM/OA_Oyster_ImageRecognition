@@ -11,4 +11,5 @@ testing/
 photos/*.JPG
 width_debug
 Finalized Data
-
+measureallmissing.py
+archive/

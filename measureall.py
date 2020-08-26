@@ -1,5 +1,5 @@
 import numpy as np
-import cv2 as cv
+import cv2 as cv # opencv 
 from pandas import Series, DataFrame, isnull, concat
 from scipy.spatial import ConvexHull, convex_hull_plot_2d
 from numpy import random, nanmax, nanmin, argmax, unravel_index
@@ -7,7 +7,7 @@ from numpy.linalg import norm
 from scipy.spatial.distance import pdist, squareform
 from scipy.ndimage import distance_transform_edt
 #import imageai
-from imageai.Detection.Custom import CustomObjectDetection
+from imageai.Detection.Custom import CustomObjectDetection # github.com/olafenwamoses/imageai
 import time
 import os
 #import sys

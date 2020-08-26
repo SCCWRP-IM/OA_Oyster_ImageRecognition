@@ -33,7 +33,8 @@ def image_resize(image, width = None, height = None, inter = cv.INTER_AREA):
     # return the resized image
     return resized
 print("getting list of photos to resize")
-photos = glob.glob("/unraid/photos/OAImageRecognition/NewPhotos/*.JPG")
+#photos = glob.glob("/unraid/photos/OAImageRecognition/NewPhotos/*.JPG")
+photos = glob.glob("/unraid/photos/OAImageRecognition/MissingPhotos/*.JPG")
 print("looping through photos")
 for photo in photos:
     print("image_id")
@@ -43,6 +44,6 @@ for photo in photos:
     print("resize the image")
     pic = image_resize(pic, height = 800)
     print("write image out to a JPG")
-    cv.imwrite("/unraid/photos/OAImageRecognition/NewPhotos/resized/%s-resized.JPG" % image_id, pic)
+    cv.imwrite("/unraid/photos/OAImageRecognition/MissingPhotos/resized/%s-resized.JPG" % image_id, pic)
 
 
